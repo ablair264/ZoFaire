@@ -31,7 +31,7 @@ async function cleanupDuplicateItems() {
       const docId = doc.id;
       
       // Check if document ID starts with "ITEM_"
-      if (docId.startsWith('ITEM_')) {
+      if (docId.startsWith('301')) {
         try {
           await doc.ref.delete();
           console.log(`Deleted document: ${docId}`);

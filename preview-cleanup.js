@@ -35,7 +35,7 @@ async function previewCleanup() {
       const data = doc.data();
       
       // Check if document ID starts with "ITEM_"
-      if (docId.startsWith('ITEM_')) {
+      if (docId.startsWith('301')) {
         toDelete.push({
           id: docId,
           sku: data.sku || 'No SKU',
