@@ -230,7 +230,7 @@ const ZohoFaireIntegration = () => {
   const [loading, setLoading] = useState(false);
   const [syncStatus, setSyncStatus] = useState('idle'); // 'idle', 'fetchingZoho', 'matchingImages', 'uploadingToFaire', 'complete', 'error'
   const [page, setPage] = useState(0);
-  const [rowsPerPage, setRowsPerPage] = useState(10);
+  const [rowsPerPage, setRowsPerPage] = useState(200); // Use max page size for Zoho API
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'info' });
   const [activeTab, setActiveTab] = useState(0); // 0 for Zoho Items, 1 for Image Management
   const [authStatus, setAuthStatus] = useState(false);
@@ -786,6 +786,11 @@ const ZohoFaireIntegration = () => {
                 component="div"
               >
                 Zoho Inventory Items
+                {zohoItemsFetchedCount > 0 && (
+                  <Typography variant="body2" component="span" sx={{ ml: 2, fontWeight: 'normal', color: 'text.secondary' }}>
+                    ({zohoItemsFetchedCount} total {filterInactive ? 'active' : ''} items - Page {page + 1} of {Math.ceil(zohoItemsFetchedCount / rowsPerPage)})
+                  </Typography>
+                )}
               </Typography>
               <TextField
                 label="Search Items"
@@ -901,9 +906,7 @@ const ZohoFaireIntegration = () => {
                     </TableCell>
                   </TableRow>
                 ) : (
-                  filteredItems
-                    .slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
-                    .map((item) => {
+                  filteredItems.map((item) => {
                       const isItemSelected = isSelected(item.item_id);
                       return (
                         <TableRow
@@ -1064,9 +1067,9 @@ const ZohoFaireIntegration = () => {
             </Table>
 
             <TablePagination
-              rowsPerPageOptions={[5, 10, 25, 50]}
+              rowsPerPageOptions={[50, 100, 200]}
               component="div"
-              count={filteredItems.length}
+              count={zohoItemsFetchedCount} // Use total count from API
               rowsPerPage={rowsPerPage}
               page={page}
               onPageChange={handleChangePage}

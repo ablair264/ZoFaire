@@ -1,6 +1,27 @@
 // firebase-integration.js - Firebase Admin SDK integration for ZoFaire
 const admin = require('firebase-admin');
 
+// Normalize brand names for Firebase paths (remove special characters, umlauts, etc.)
+function normalizeBrandName(brand) {
+  if (!brand) return 'unknown';
+  
+  // Convert to lowercase and normalize unicode characters
+  let normalized = brand.toLowerCase()
+    .normalize('NFD') // Decompose accented characters
+    .replace(/[\u0300-\u036f]/g, '') // Remove diacritical marks
+    .replace(/ä/g, 'a')
+    .replace(/ö/g, 'o')
+    .replace(/ü/g, 'u')
+    .replace(/ß/g, 'ss')
+    .replace(/æ/g, 'ae')
+    .replace(/ø/g, 'o')
+    .replace(/å/g, 'a')
+    .replace(/[^a-z0-9]/g, '') // Remove all non-alphanumeric characters
+    .trim();
+  
+  return normalized || 'unknown';
+}
+
 // Initialize Firebase Admin SDK
 let initialized = false;
 let storage = null;
@@ -76,7 +97,8 @@ async function getProductImages(manufacturer, sku) {
     }
 
     const bucket = storage.bucket();
-    const prefix = `brand-images/${manufacturer.toLowerCase()}/${sku.toLowerCase()}`;
+    const normalizedManufacturer = normalizeBrandName(manufacturer);
+    const prefix = `brand-images/${normalizedManufacturer}/${sku.toLowerCase()}`;
     
     console.log(`🔍 Searching for images with prefix: ${prefix}`);
     
@@ -200,6 +222,42 @@ async function getAvailableBrands() {
   }
 }
 
+// Save or update item in Firestore
+async function saveItemToFirestore(item, images) {
+  try {
+    const { db } = initializeFirebase();
+    if (!db) {
+      console.warn('Firestore not initialized, skipping save');
+      return;
+    }
+    
+    const docRef = db.collection('zofaire_items').doc(item.item_id);
+    
+    const data = {
+      ...item,
+      images: images.map(img => ({
+        url: img.publicUrl || img.url,
+        path: img.path,
+        name: img.name,
+        size: img.size,
+        variant: img.variant,
+        isVariant: img.isVariant
+      })),
+      imageCount: images.filter(img => !img.isVariant).length,
+      hasImages: images.length > 0,
+      lastUpdated: admin.firestore.FieldValue.serverTimestamp(),
+      normalizedManufacturer: normalizeBrandName(item.manufacturer || item.brand)
+    };
+    
+    await docRef.set(data, { merge: true });
+    console.log(`✅ Saved item ${item.sku} to Firestore with ${images.length} images`);
+    
+  } catch (error) {
+    console.error(`❌ Error saving item to Firestore:`, error.message);
+    // Don't throw - this is a non-critical operation
+  }
+}
+
 // Match Zoho products with Firebase images
 async function matchProductsWithImages(products) {
   try {
@@ -226,7 +284,7 @@ async function matchProductsWithImages(products) {
       
       const batchResults = await Promise.all(batch.map(async (product) => {
         try {
-          const manufacturer = product.manufacturer || product.brand || 'unknown';
+          const manufacturer = normalizeBrandName(product.manufacturer || product.brand);
           const sku = product.sku;
           
           if (!sku) {
@@ -241,6 +299,9 @@ async function matchProductsWithImages(products) {
           }
           
           const images = await getProductImages(manufacturer, sku);
+          
+          // Save to Firestore regardless of whether images were found
+          await saveItemToFirestore(product, images);
           
           if (images.length > 0) {
             results.matched++;
@@ -337,5 +398,6 @@ module.exports = {
   downloadImage,
   getAvailableBrands,
   matchProductsWithImages,
-  uploadProcessedImage
+  uploadProcessedImage,
+  saveItemToFirestore
 };

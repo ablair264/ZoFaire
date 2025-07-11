@@ -14,7 +14,8 @@ const {
     // downloadImage, // Uncomment if used directly in server.js
     getAvailableBrands,
     matchProductsWithImages,
-    uploadProcessedImage
+    uploadProcessedImage,
+    saveItemToFirestore
     // getZohoAccessToken, // Function to get current access token (REMOVE from here)
     // refreshZohoTokens // Function to refresh token (REMOVE from here)
 } = require('./firebase-integration'); // Adjust path as needed for your project structure
@@ -24,6 +25,27 @@ const { getZohoAccessToken, refreshZohoTokens } = require('./zoho-auth');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
+
+// Normalize brand names for Firebase paths (remove special characters, umlauts, etc.)
+const normalizeBrandName = (brand) => {
+    if (!brand) return 'unknown';
+    
+    // Convert to lowercase and normalize unicode characters
+    let normalized = brand.toLowerCase()
+        .normalize('NFD') // Decompose accented characters
+        .replace(/[\u0300-\u036f]/g, '') // Remove diacritical marks
+        .replace(/ä/g, 'a')
+        .replace(/ö/g, 'o')
+        .replace(/ü/g, 'u')
+        .replace(/ß/g, 'ss')
+        .replace(/æ/g, 'ae')
+        .replace(/ø/g, 'o')
+        .replace(/å/g, 'a')
+        .replace(/[^a-z0-9]/g, '') // Remove all non-alphanumeric characters
+        .trim();
+    
+    return normalized || 'unknown';
+};
 
 // Environment variables (read once at startup)
 const ZOHO_CLIENT_ID = process.env.ZOHO_CLIENT_ID;
@@ -219,7 +241,7 @@ app.get('/api/zoho/items', async (req, res) => {
         const params = {
             organization_id: ZOHO_ORGANIZATION_ID,
             page: page || 1,
-            per_page: per_page || 20,
+            per_page: per_page || 200, // Increased default to 200 (Zoho's max)
             sort_column: sort_column || 'name',
             sort_order: zohoSortOrder
         };
@@ -268,7 +290,7 @@ app.post('/api/workflow/complete-sync', async (req, res) => {
             throw new Error('Zoho access token not available for complete sync workflow.');
         }
 
-        // Fetch ALL Zoho items for the sync process (with pagination)
+        // Fetch ALL ACTIVE Zoho items for the sync process (with pagination)
         let allZohoItems = [];
         let page = 1;
         const perPage = 200;
@@ -276,7 +298,12 @@ app.post('/api/workflow/complete-sync', async (req, res) => {
         do {
             const response = await axios.get(`${ZOHO_BASE_URL}/items`, {
                 headers: { 'Authorization': `Zoho-oauthtoken ${accessToken}` },
-                params: { organization_id: ZOHO_ORGANIZATION_ID, per_page: perPage, page }
+                params: { 
+                    organization_id: ZOHO_ORGANIZATION_ID, 
+                    per_page: perPage, 
+                    page,
+                    status: 'active' // Only fetch active items
+                }
             });
             const items = response.data.items || [];
             allZohoItems = allZohoItems.concat(items);
@@ -396,7 +423,10 @@ app.post('/api/faire/upload', async (req, res) => {
 // Existing Firebase image fetching endpoint (provided by user)
 app.get('/api/firebase/images/:manufacturer/:sku', async (req, res) => {
     try {
-        const { manufacturer, sku } = req.params;
+        let { manufacturer, sku } = req.params;
+        
+        // Normalize the manufacturer name for Firebase path
+        manufacturer = normalizeBrandName(manufacturer);
 
         if (!manufacturer || !sku) {
             return res.status(400).json({
@@ -441,11 +471,14 @@ app.post('/api/firebase/upload-processed-image', upload.array('images'), async (
             return res.status(400).json({ success: false, message: 'No files uploaded.' });
         }
 
-        const { manufacturer, sku, padding, quality } = req.body;
+        let { manufacturer, sku, padding, quality } = req.body;
 
         if (!manufacturer || !sku) {
             return res.status(400).json({ success: false, message: 'Manufacturer and SKU are required for image processing.' });
         }
+        
+        // Normalize manufacturer name for Firebase path
+        manufacturer = normalizeBrandName(manufacturer);
 
         const uploadedFilePaths = req.files.map(file => file.path);
         const processedImageUrls = [];
@@ -468,9 +501,15 @@ app.post('/api/firebase/upload-processed-image', upload.array('images'), async (
                      throw new Error(`Processed image file not found at: ${processedImagePath}`);
                 }
 
+                // Read the processed image file
+                const processedImageBuffer = await fs.readFile(processedImagePath);
+                
+                // Construct the destination path for Firebase Storage
+                const destinationPath = `brand-images/${manufacturer}/${sku}_${Date.now()}.webp`;
+                
                 // Upload the processed image to Firebase Storage
-                const imageUrl = await uploadProcessedImage(processedImagePath, manufacturer, sku);
-                processedImageUrls.push(imageUrl);
+                const { publicUrl } = await uploadProcessedImage(processedImageBuffer, destinationPath);
+                processedImageUrls.push(publicUrl);
 
                 // Clean up the locally stored processed file
                 await fs.unlink(processedImagePath);
@@ -524,13 +563,16 @@ app.post('/api/firebase/batch-upload-images', upload.array('images', 50), async 
             return res.status(400).json({ success: false, message: 'No files uploaded.' });
         }
 
-        const { brand } = req.body;
+        let { brand } = req.body;
 
         if (!brand) {
             return res.status(400).json({ success: false, message: 'Brand is required for batch upload.' });
         }
-
-        console.log(`Batch upload: Processing ${req.files.length} images for brand: ${brand}`);
+        
+        // Normalize brand name for Firebase path
+        const normalizedBrand = normalizeBrandName(brand);
+        
+        console.log(`Batch upload: Processing ${req.files.length} images for brand: ${brand} (normalized: ${normalizedBrand})`);
 
         // Create temp directories
         const tempInputDir = path.join(__dirname, 'uploads', 'batch-input', Date.now().toString());
@@ -555,7 +597,7 @@ app.post('/api/firebase/batch-upload-images', upload.array('images', 50), async 
                 scriptPath,
                 '--input', tempInputDir,
                 '--output', tempOutputDir,
-                '--brand', brand.toLowerCase(),
+                '--brand', normalizedBrand, // Use normalized brand name
                 '--padding', '50',
                 '--quality', '85'
             ];
@@ -601,13 +643,19 @@ app.post('/api/firebase/batch-upload-images', upload.array('images', 50), async 
                     const baseName = path.basename(filename, path.extname(filename));
                     const sku = baseName.split('_')[0];
                     
+                    // Read the processed image file
+                    const processedImageBuffer = await fs.readFile(filePath);
+                    
+                    // Construct the destination path for Firebase Storage
+                    const destinationPath = `brand-images/${normalizedBrand}/${filename}`;
+                    
                     // Upload to Firebase
-                    const imageUrl = await uploadProcessedImage(filePath, brand.toLowerCase(), sku);
+                    const { publicUrl } = await uploadProcessedImage(processedImageBuffer, destinationPath);
                     
                     processedResults.push({
                         filename: filename,
                         sku: sku,
-                        url: imageUrl,
+                        url: publicUrl,
                         success: true
                     });
                 } catch (uploadError) {
@@ -661,6 +709,45 @@ app.get('/api/faire/status', (req, res) => {
 app.get('/api/firebase/status', (req, res) => {
     const connected = firebaseStorage !== undefined;
     res.json({ connected });
+});
+
+// NEW: Get items from Firestore (for future use)
+app.get('/api/firebase/items', async (req, res) => {
+    try {
+        const { db } = initializeFirebase();
+        if (!db) {
+            return res.status(503).json({ success: false, message: 'Firestore not initialized' });
+        }
+        
+        const { limit = 100, hasImages, manufacturer } = req.query;
+        
+        let query = db.collection('zofaire_items');
+        
+        if (hasImages === 'true') {
+            query = query.where('hasImages', '==', true);
+        } else if (hasImages === 'false') {
+            query = query.where('hasImages', '==', false);
+        }
+        
+        if (manufacturer && manufacturer !== 'all') {
+            query = query.where('normalizedManufacturer', '==', normalizeBrandName(manufacturer));
+        }
+        
+        query = query.orderBy('lastUpdated', 'desc').limit(parseInt(limit));
+        
+        const snapshot = await query.get();
+        const items = [];
+        
+        snapshot.forEach(doc => {
+            items.push({ id: doc.id, ...doc.data() });
+        });
+        
+        res.json({ success: true, items, count: items.length });
+        
+    } catch (error) {
+        console.error('Error fetching items from Firestore:', error);
+        res.status(500).json({ success: false, message: 'Failed to fetch items from Firestore', error: error.message });
+    }
 });
 
 

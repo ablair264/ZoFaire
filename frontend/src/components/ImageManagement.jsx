@@ -47,6 +47,27 @@ import {
 
 const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'https://zofaire.onrender.com/api';
 
+// Normalize brand names for Firebase paths (remove special characters, umlauts, etc.)
+const normalizeBrandName = (brand) => {
+  if (!brand) return 'unknown';
+  
+  // Convert to lowercase and normalize unicode characters
+  let normalized = brand.toLowerCase()
+    .normalize('NFD') // Decompose accented characters
+    .replace(/[\u0300-\u036f]/g, '') // Remove diacritical marks
+    .replace(/ä/g, 'a')
+    .replace(/ö/g, 'o')
+    .replace(/ü/g, 'u')
+    .replace(/ß/g, 'ss')
+    .replace(/æ/g, 'ae')
+    .replace(/ø/g, 'o')
+    .replace(/å/g, 'a')
+    .replace(/[^a-z0-9]/g, '') // Remove all non-alphanumeric characters
+    .trim();
+  
+  return normalized || 'unknown';
+};
+
 // Brand avatar component
 const BrandAvatar = ({ brand, size = 24 }) => {
   const theme = useTheme();
@@ -163,11 +184,24 @@ const ImageManagement = ({ zohoItems, onAlert, onRefreshItems }) => {
   // Extract unique manufacturers from items
   useEffect(() => {
     if (zohoItems && zohoItems.length > 0) {
-      const uniqueManufacturers = [...new Set(
-        zohoItems
-          .map(item => (item.manufacturer || item.brand || 'Unknown').toLowerCase())
-          .filter(m => m && m !== 'unknown')
-      )].sort();
+      // Create a map to store unique manufacturers with their original names
+      const manufacturerMap = new Map();
+      
+      zohoItems.forEach(item => {
+        const original = item.manufacturer || item.brand;
+        if (original) {
+          const normalized = normalizeBrandName(original);
+          if (normalized !== 'unknown' && !manufacturerMap.has(normalized)) {
+            manufacturerMap.set(normalized, original);
+          }
+        }
+      });
+      
+      // Convert to array of objects sorted by original name
+      const uniqueManufacturers = Array.from(manufacturerMap.entries())
+        .map(([normalized, original]) => ({ normalized, original }))
+        .sort((a, b) => a.original.toLowerCase().localeCompare(b.original.toLowerCase()));
+      
       setManufacturers(uniqueManufacturers);
     }
   }, [zohoItems]);
@@ -193,7 +227,7 @@ const ImageManagement = ({ zohoItems, onAlert, onRefreshItems }) => {
     const itemsToMatch = selectedManufacturer === 'all' 
       ? zohoItems 
       : zohoItems.filter(item => 
-          (item.manufacturer || item.brand || '').toLowerCase() === selectedManufacturer.toLowerCase()
+          normalizeBrandName(item.manufacturer || item.brand) === selectedManufacturer
         );
 
     if (itemsToMatch.length === 0) {
@@ -279,7 +313,7 @@ const ImageManagement = ({ zohoItems, onAlert, onRefreshItems }) => {
 
   // Get images for a specific product
   const getProductImages = async (product) => {
-    const manufacturer = (product.manufacturer || product.brand || 'unknown').toLowerCase();
+    const manufacturer = normalizeBrandName(product.manufacturer || product.brand);
     const sku = product.sku;
 
     if (!sku) {
@@ -331,7 +365,7 @@ const ImageManagement = ({ zohoItems, onAlert, onRefreshItems }) => {
       const formData = new FormData();
       formData.append('sku', selectedProduct.sku);
       formData.append('name', selectedProduct.name);
-      formData.append('manufacturer', selectedProduct.manufacturer || selectedProduct.brand || 'unknown');
+      formData.append('manufacturer', normalizeBrandName(selectedProduct.manufacturer || selectedProduct.brand));
       
       // Add options
       formData.append('options', JSON.stringify(processOptions));
@@ -483,7 +517,7 @@ const ImageManagement = ({ zohoItems, onAlert, onRefreshItems }) => {
     
     try {
       const formData = new FormData();
-      formData.append('brand', batchSelectedBrand);
+      formData.append('brand', normalizeBrandName(batchSelectedBrand));
       
       // Add all files
       batchFiles.forEach(file => {
@@ -512,7 +546,7 @@ const ImageManagement = ({ zohoItems, onAlert, onRefreshItems }) => {
           loadFirebaseBrands();
           
           // If we're viewing this brand, refresh the image matching
-          if (selectedManufacturer === batchSelectedBrand.toLowerCase()) {
+          if (selectedManufacturer === normalizeBrandName(batchSelectedBrand)) {
             matchAllImages();
           }
         }
@@ -533,7 +567,7 @@ const ImageManagement = ({ zohoItems, onAlert, onRefreshItems }) => {
   const filteredProducts = selectedManufacturer === 'all' 
     ? zohoItems 
     : zohoItems.filter(item => 
-        (item.manufacturer || item.brand || '').toLowerCase() === selectedManufacturer.toLowerCase()
+        normalizeBrandName(item.manufacturer || item.brand) === selectedManufacturer
       );
 
   return (
@@ -581,10 +615,14 @@ const ImageManagement = ({ zohoItems, onAlert, onRefreshItems }) => {
                   label="Manufacturer"
                   renderValue={(selected) => {
                     if (selected === 'all') return 'All Manufacturers';
+                    // Find the manufacturer object
+                    const mfr = manufacturers.find(m => m.normalized === selected);
+                    const displayName = mfr ? mfr.original : selected;
+                    
                     return (
                       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                        <BrandAvatar brand={selected} size={20} />
-                        <span>{selected.charAt(0).toUpperCase() + selected.slice(1)}</span>
+                        <BrandAvatar brand={displayName} size={20} />
+                        <span>{displayName}</span>
                       </Box>
                     );
                   }}
@@ -592,10 +630,10 @@ const ImageManagement = ({ zohoItems, onAlert, onRefreshItems }) => {
                   <MenuItem value="all">All Manufacturers</MenuItem>
                   <Divider />
                   {manufacturers.map(mfr => (
-                    <MenuItem key={mfr} value={mfr}>
+                    <MenuItem key={mfr.normalized} value={mfr.normalized}>
                       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                        <BrandAvatar brand={mfr} size={24} />
-                        <span>{mfr.charAt(0).toUpperCase() + mfr.slice(1)}</span>
+                        <BrandAvatar brand={mfr.original} size={24} />
+                        <span>{mfr.original}</span>
                       </Box>
                     </MenuItem>
                   ))}
@@ -657,18 +695,22 @@ const ImageManagement = ({ zohoItems, onAlert, onRefreshItems }) => {
         </CardContent>
       </Card>
 
-      {/* Products with Image Status */}
+      {/* Products with Image Status - Visual Grid (Remove this section if redundant) */}
       <Paper sx={{ p: 2 }}>
         <Typography variant="h6" gutterBottom>
           Product Image Status 
-          {selectedManufacturer !== 'all' && (
-            <Chip 
-              label={selectedManufacturer} 
-              size="small" 
-              sx={{ ml: 2 }} 
-              onDelete={() => setSelectedManufacturer('all')}
-            />
-          )}
+          {selectedManufacturer !== 'all' && (() => {
+            const mfr = manufacturers.find(m => m.normalized === selectedManufacturer);
+            const displayName = mfr ? mfr.original : selectedManufacturer;
+            return (
+              <Chip 
+                label={displayName} 
+                size="small" 
+                sx={{ ml: 2 }} 
+                onDelete={() => setSelectedManufacturer('all')}
+              />
+            );
+          })()}
         </Typography>
         
         <Grid container spacing={2}>
@@ -982,17 +1024,38 @@ const ImageManagement = ({ zohoItems, onAlert, onRefreshItems }) => {
                   );
                 }}
               >
-                {[...new Set([
-                  ...firebaseBrands,
-                  ...manufacturers.map(m => m.charAt(0).toUpperCase() + m.slice(1))
-                ])].sort().map(brand => (
-                  <MenuItem key={brand} value={brand}>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                      <BrandAvatar brand={brand} size={24} />
-                      <span>{brand}</span>
-                    </Box>
-                  </MenuItem>
-                ))}
+                {(() => {
+                  // Combine Firebase brands with manufacturers, avoiding duplicates
+                  const brandSet = new Map();
+                  
+                  // Add Firebase brands
+                  firebaseBrands.forEach(brand => {
+                    const normalized = normalizeBrandName(brand);
+                    if (!brandSet.has(normalized)) {
+                      brandSet.set(normalized, brand);
+                    }
+                  });
+                  
+                  // Add manufacturers
+                  manufacturers.forEach(mfr => {
+                    if (!brandSet.has(mfr.normalized)) {
+                      brandSet.set(mfr.normalized, mfr.original);
+                    }
+                  });
+                  
+                  // Convert to sorted array
+                  return Array.from(brandSet.entries())
+                    .map(([normalized, original]) => ({ normalized, original }))
+                    .sort((a, b) => a.original.toLowerCase().localeCompare(b.original.toLowerCase()))
+                    .map(brand => (
+                      <MenuItem key={brand.original} value={brand.original}>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                          <BrandAvatar brand={brand.original} size={24} />
+                          <span>{brand.original}</span>
+                        </Box>
+                      </MenuItem>
+                    ));
+                })()}
               </Select>
             </FormControl>
             
