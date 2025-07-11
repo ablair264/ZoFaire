@@ -4,6 +4,14 @@ const admin = require('firebase-admin');
 // Normalize brand names for Firebase paths (remove special characters, umlauts, etc.)
 function normalizeBrandName(brand) {
   if (!brand) return 'unknown';
+  // Special case: My Flame Lifestyle → myflame
+  if (typeof brand === 'string' && brand.trim().toLowerCase() === 'my flame lifestyle') {
+    return 'myflame';
+  }
+  // Special case: räder → rader
+  if (typeof brand === 'string' && brand.trim().toLowerCase() === 'räder') {
+    return 'rader';
+  }
   
   // Convert to lowercase and normalize unicode characters
   let normalized = brand.toLowerCase()
@@ -302,6 +310,33 @@ async function matchProductsWithImages(products) {
           
           // Save to Firestore regardless of whether images were found
           await saveItemToFirestore(product, images);
+
+          // Also update item_data collection by SKU with image URLs and metadata
+          try {
+            const { db } = initializeFirebase();
+            if (db && product.sku) {
+              const itemDataRef = db.collection('item_data').doc(product.sku);
+              await itemDataRef.set({
+                sku: product.sku,
+                item_id: product.item_id,
+                name: product.name,
+                images: images.map(img => ({
+                  url: img.publicUrl || img.url,
+                  path: img.path,
+                  name: img.name,
+                  size: img.size,
+                  variant: img.variant,
+                  isVariant: img.isVariant
+                })),
+                imageCount: images.filter(img => !img.isVariant).length,
+                hasImages: images.length > 0,
+                lastUpdated: admin.firestore.FieldValue.serverTimestamp(),
+              }, { merge: true });
+              console.log(`✅ Updated item_data for SKU ${product.sku} with ${images.length} images`);
+            }
+          } catch (err) {
+            console.error(`❌ Error updating item_data for SKU ${product.sku}:`, err.message);
+          }
           
           if (images.length > 0) {
             results.matched++;

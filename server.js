@@ -315,8 +315,22 @@ app.post('/api/workflow/complete-sync', async (req, res) => {
                 break;
             }
         } while (true);
+        // Filter out products with brand/manufacturer 'service' or 'goods'
+        allZohoItems = allZohoItems.filter(item => {
+            const brand = (item.manufacturer || item.brand || '').toLowerCase();
+            return brand !== 'service' && brand !== 'goods';
+        });
         zohoItemsFetched = allZohoItems.length;
-        console.log(`Fetched ${zohoItemsFetched} Zoho items for sync.`);
+        console.log(`Fetched ${zohoItemsFetched} Zoho items for sync (after filtering 'service' and 'goods').`);
+
+        // Save all items to Firestore collection 'zofaire_items'
+        for (const item of allZohoItems) {
+            try {
+                await saveItemToFirestore(item, []); // Save without images for now
+            } catch (e) {
+                console.error(`Error saving item ${item.sku} to Firestore:`, e.message);
+            }
+        }
 
         // Step 2: Match and Process Images (calls firebase-integration's logic)
         console.log('Matching and processing images with product data...');
@@ -417,6 +431,121 @@ app.post('/api/faire/upload', async (req, res) => {
     } catch (error) {
         console.error('Error uploading to Faire:', error);
         res.status(500).json({ success: false, message: 'Failed to upload to Faire', error: error.message });
+    }
+});
+
+// NEW: Fetch items from items_data collection instead of Zoho API
+app.get('/api/items', async (req, res) => {
+    try {
+        const { db } = initializeFirebase();
+        if (!db) {
+            throw new Error('Firebase not initialized');
+        }
+
+        // Get query parameters
+        const page = parseInt(req.query.page) || 1;
+        const perPage = parseInt(req.query.per_page) || 50;
+        const sortColumn = req.query.sort_column || 'name';
+        const sortOrder = req.query.sort_order || 'asc';
+        const filterInactive = req.query.filterInactive === 'true';
+        const searchText = req.query.search_text || '';
+
+        // Get all items from items_data collection
+        const itemsSnapshot = await db.collection('items_data').get();
+        let items = [];
+
+        itemsSnapshot.forEach(doc => {
+            const itemData = doc.data();
+            
+            // Filter out items with manufacturer 'service' or 'goods'
+            const manufacturer = (itemData.manufacturer || '').toLowerCase();
+            if (manufacturer === 'service' || manufacturer === 'goods') {
+                return; // Skip this item
+            }
+
+            // Filter by status if filterInactive is true
+            if (filterInactive && itemData.status !== 'active') {
+                return; // Skip inactive items
+            }
+
+            // Filter by search text
+            if (searchText) {
+                const searchLower = searchText.toLowerCase();
+                const nameMatch = (itemData.name || '').toLowerCase().includes(searchLower);
+                const skuMatch = (itemData.sku || '').toLowerCase().includes(searchLower);
+                const descriptionMatch = (itemData.description || '').toLowerCase().includes(searchLower);
+                
+                if (!nameMatch && !skuMatch && !descriptionMatch) {
+                    return; // Skip if no match
+                }
+            }
+
+            // Transform to match the expected format
+            items.push({
+                item_id: itemData.item_id || doc.id,
+                sku: itemData.sku,
+                name: itemData.name || itemData.item_name,
+                description: itemData.description,
+                manufacturer: itemData.manufacturer,
+                brand: itemData.brand,
+                rate: itemData.rate,
+                purchase_rate: itemData.purchase_rate,
+                status: itemData.status,
+                available_stock: itemData.available_stock,
+                stock_on_hand: itemData.stock_on_hand,
+                created_time: itemData.created_time,
+                last_modified_time: itemData.last_modified_time,
+                product_type: itemData.product_type,
+                item_type: itemData.item_type,
+                // Add any other fields you need
+            });
+        });
+
+        // Sort items
+        items.sort((a, b) => {
+            let aVal = a[sortColumn] || '';
+            let bVal = b[sortColumn] || '';
+            
+            // Handle numeric values
+            if (typeof aVal === 'number' && typeof bVal === 'number') {
+                return sortOrder === 'asc' ? aVal - bVal : bVal - aVal;
+            }
+            
+            // Handle string values
+            aVal = String(aVal).toLowerCase();
+            bVal = String(bVal).toLowerCase();
+            
+            if (sortOrder === 'asc') {
+                return aVal.localeCompare(bVal);
+            } else {
+                return bVal.localeCompare(aVal);
+            }
+        });
+
+        // Apply pagination
+        const total = items.length;
+        const startIndex = (page - 1) * perPage;
+        const endIndex = startIndex + perPage;
+        const paginatedItems = items.slice(startIndex, endIndex);
+
+        console.log(`Fetched ${paginatedItems.length} items from items_data collection (page ${page}, total ${total})`);
+        
+        res.json({
+            success: true,
+            items: paginatedItems,
+            total: total,
+            page: page,
+            per_page: perPage,
+            total_pages: Math.ceil(total / perPage)
+        });
+
+    } catch (error) {
+        console.error('Error fetching items from items_data:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to fetch items from items_data',
+            error: error.message
+        });
     }
 });
 

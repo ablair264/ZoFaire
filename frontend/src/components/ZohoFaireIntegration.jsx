@@ -1,65 +1,73 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   Box,
-  Card,
-  CardContent,
+  Paper,
   Typography,
-  TextField,
   Button,
-  Checkbox,
   Table,
   TableBody,
   TableCell,
   TableContainer,
   TableHead,
   TableRow,
-  Paper,
-  Grid,
-  Chip,
-  Alert,
-  CircularProgress,
   TablePagination,
-  Toolbar,
+  Checkbox,
+  TextField,
   IconButton,
   Tooltip,
+  Chip,
+  Grid,
+  Card,
+  CardContent,
+  Avatar,
+  Snackbar,
+  Alert,
+  alpha,
+  useTheme,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
   LinearProgress,
-  Tabs,
-  Tab,
+  CircularProgress,
   FormControl,
   InputLabel,
   Select,
   MenuItem,
   Divider,
-  useTheme,
-  alpha,
-  Avatar,
-  Fade,
+  List,
+  ListItem,
+  ListItemText,
+  ListItemIcon,
+  ListItemAvatar,
+  ImageList,
+  ImageListItem,
+  ImageListItemBar,
+  Toolbar,
   FormControlLabel,
   styled,
   keyframes,
-  Snackbar,
   Slide
 } from '@mui/material';
 import {
   Refresh as RefreshIcon,
-  Upload as UploadIcon,
+  Search as SearchIcon,
   Inventory as InventoryIcon,
-  CloudUpload as CloudUploadIcon,
-  Schedule as ScheduleIcon,
-  CheckCircle as CheckCircleIcon,
   Image as ImageIcon,
-  FilterList as FilterListIcon,
-  TrendingUp as TrendingUpIcon,
+  Visibility as VisibilityIcon,
+  CloudUpload as CloudUploadIcon,
+  CheckCircle as CheckCircleIcon,
   Warning as WarningIcon,
-  Close as CloseIcon,
-  CheckCircleOutline as CheckCircleOutlineIcon,
-  RadioButtonUnchecked as RadioButtonUncheckedIcon,
-  Visibility as VisibilityIcon
+  AddPhotoAlternate as AddPhotoIcon,
+  CloudSync as CloudSyncIcon,
+  FilterList as FilterListIcon,
+  Download as DownloadIcon,
+  Upload as UploadIcon,
+  Close as CloseIcon
 } from '@mui/icons-material';
-import ImageManagement from './ImageManagement';
-import ProgressLoader from './ProgressLoader';
+import ItemDetail from './ItemDetail';
 
-const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'https://zofaire.onrender.com/api';
+const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:3001/api';
 
 // Animated pulse keyframes
 const pulseGreen = keyframes`
@@ -98,29 +106,10 @@ const pulseRed = keyframes`
   }
 `;
 
-// Firebase flame animation
-const flameWobble = keyframes`
-  0%, 100% { 
-    transform: scale(1) translateY(0); 
-    filter: hue-rotate(0deg) brightness(1);
-  }
-  25% { 
-    transform: scale(1.1) translateY(-2px); 
-    filter: hue-rotate(10deg) brightness(1.1);
-  }
-  50% { 
-    transform: scale(0.95) translateY(1px); 
-    filter: hue-rotate(-5deg) brightness(0.95);
-  }
-  75% { 
-    transform: scale(1.05) translateY(-1px); 
-    filter: hue-rotate(5deg) brightness(1.05);
-  }
-`;
-
+// Smaller StatusBadge for header
 const StatusBadge = styled(Box)(({ theme, connected }) => ({
-  width: 80,
-  height: 80,
+  width: 50,
+  height: 50,
   borderRadius: '50%',
   display: 'flex',
   alignItems: 'center',
@@ -128,12 +117,12 @@ const StatusBadge = styled(Box)(({ theme, connected }) => ({
   background: connected 
     ? `linear-gradient(135deg, ${alpha(theme.palette.success.main, 0.1)} 0%, ${alpha(theme.palette.success.light, 0.2)} 100%)`
     : `linear-gradient(135deg, ${alpha(theme.palette.error.main, 0.1)} 0%, ${alpha(theme.palette.error.light, 0.2)} 100%)`,
-  border: `3px solid ${connected ? theme.palette.success.main : theme.palette.error.main}`,
+  border: `2px solid ${connected ? theme.palette.success.main : theme.palette.error.main}`,
   boxShadow: connected
-    ? `0 0 20px ${alpha(theme.palette.success.main, 0.4)}, 
-       inset 0 0 20px ${alpha(theme.palette.success.main, 0.1)}`
-    : `0 0 20px ${alpha(theme.palette.error.main, 0.4)}, 
-       inset 0 0 20px ${alpha(theme.palette.error.main, 0.1)}`,
+    ? `0 0 15px ${alpha(theme.palette.success.main, 0.4)}, 
+       inset 0 0 15px ${alpha(theme.palette.success.main, 0.1)}`
+    : `0 0 15px ${alpha(theme.palette.error.main, 0.4)}, 
+       inset 0 0 15px ${alpha(theme.palette.error.main, 0.1)}`,
   animation: `${connected ? pulseGreen : pulseRed} 2s ease-in-out infinite`,
   cursor: connected ? 'default' : 'pointer',
   transition: 'all 0.3s ease',
@@ -141,14 +130,14 @@ const StatusBadge = styled(Box)(({ theme, connected }) => ({
   '&:hover': {
     transform: connected ? 'none' : 'scale(1.1)',
     boxShadow: connected
-      ? `0 0 20px ${alpha(theme.palette.success.main, 0.4)}, 
-         inset 0 0 20px ${alpha(theme.palette.success.main, 0.1)}`
-      : `0 0 30px ${alpha(theme.palette.error.main, 0.6)}, 
-         inset 0 0 25px ${alpha(theme.palette.error.main, 0.2)}`,
+      ? `0 0 15px ${alpha(theme.palette.success.main, 0.4)}, 
+         inset 0 0 15px ${alpha(theme.palette.success.main, 0.1)}`
+      : `0 0 25px ${alpha(theme.palette.error.main, 0.6)}, 
+         inset 0 0 20px ${alpha(theme.palette.error.main, 0.2)}`,
   },
   '& .status-icon': {
-    width: 48,
-    height: 48,
+    width: 30,
+    height: 30,
     transition: 'transform 0.3s ease',
   },
   '&:hover .status-icon': {
@@ -160,6 +149,37 @@ const StatusBadge = styled(Box)(({ theme, connected }) => ({
 function SlideTransition(props) {
   return <Slide {...props} direction="left" />;
 }
+
+// Normalize brand names for Firebase paths (remove special characters, umlauts, etc.)
+const normalizeBrandName = (brand) => {
+  if (!brand) return 'unknown';
+  
+  // Special case: My Flame Lifestyle → myflame
+  if (typeof brand === 'string' && brand.trim().toLowerCase() === 'my flame lifestyle') {
+    return 'myflame';
+  }
+  
+  // Special case: räder → rader
+  if (typeof brand === 'string' && brand.trim().toLowerCase() === 'räder') {
+    return 'rader';
+  }
+  
+  // Convert to lowercase and normalize unicode characters
+  let normalized = brand.toLowerCase()
+    .normalize('NFD') // Decompose accented characters
+    .replace(/[\u0300-\u036f]/g, '') // Remove diacritical marks
+    .replace(/ä/g, 'a')
+    .replace(/ö/g, 'o')
+    .replace(/ü/g, 'u')
+    .replace(/ß/g, 'ss')
+    .replace(/æ/g, 'ae')
+    .replace(/ø/g, 'o')
+    .replace(/å/g, 'a')
+    .replace(/[^a-z0-9]/g, '') // Remove all non-alphanumeric characters
+    .trim();
+  
+  return normalized || 'unknown';
+};
 
 // Brand avatar component
 const BrandAvatar = ({ brand, size = 24 }) => {
@@ -232,12 +252,43 @@ const ZohoFaireIntegration = () => {
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(200); // Use max page size for Zoho API
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'info' });
-  const [activeTab, setActiveTab] = useState(0); // 0 for Zoho Items, 1 for Image Management
-  const [authStatus, setAuthStatus] = useState(false);
-  const [sortColumn, setSortColumn] = useState('name');
-  const [sortOrder, setSortOrder] = useState('asc'); // 'asc' or 'desc'
   const [filterInactive, setFilterInactive] = useState(true); // <--- Changed default to true (Active Items Only)
   const [zohoItemsFetchedCount, setZohoItemsFetchedCount] = useState(0); // <--- NEW State for item count
+  const [selectedItem, setSelectedItem] = useState(null);
+  const [detailDialogOpen, setDetailDialogOpen] = useState(false);
+  
+  // Image Management states
+  const [selectedProduct, setSelectedProduct] = useState(null);
+  const [imageDialog, setImageDialog] = useState(false);
+  const [uploadDialog, setUploadDialog] = useState(false);
+  const [firebaseBrands, setFirebaseBrands] = useState([]);
+  const [productImages, setProductImages] = useState({});
+  const [imageStats, setImageStats] = useState({
+    total: 0,
+    matched: 0,
+    missing: 0
+  });
+  const [processOptions, setProcessOptions] = useState({
+    padding: 50,
+    quality: 85,
+    createVariants: true
+  });
+  const [selectedFiles, setSelectedFiles] = useState([]);
+  const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  
+  // Batch processing states
+  const [selectedManufacturer, setSelectedManufacturer] = useState('all');
+  const [manufacturers, setManufacturers] = useState([]);
+  const [matchProgress, setMatchProgress] = useState({ current: 0, total: 0 });
+  const [isMatching, setIsMatching] = useState(false);
+  
+  // Batch upload states
+  const [batchUploadDialog, setBatchUploadDialog] = useState(false);
+  const [batchSelectedBrand, setBatchSelectedBrand] = useState('');
+  const [batchFiles, setBatchFiles] = useState([]);
+  const [batchUploading, setBatchUploading] = useState(false);
+  const [batchUploadProgress, setBatchUploadProgress] = useState({ current: 0, total: 0 });
 
   // Add state for Faire and Firebase status
   const [faireStatus, setFaireStatus] = useState(false); // true if API key present
@@ -260,7 +311,7 @@ const ZohoFaireIntegration = () => {
       try {
         const response = await fetch(`${API_BASE_URL}/auth/status`);
         const data = await response.json();
-        setAuthStatus(data.isAuthenticated);
+        // setAuthStatus(data.isAuthenticated); // This state is no longer needed
         if (!data.isAuthenticated) {
           showSnackbar('Zoho authentication is required. Please authorize the application.', 'warning');
         }
@@ -280,46 +331,81 @@ const ZohoFaireIntegration = () => {
     fetch(`${API_BASE_URL}/firebase/status`).then(res => res.json()).then(data => setFirebaseStatus(data.connected)).catch(() => setFirebaseStatus(false));
   }, []);
 
-  // Fetch Zoho Items
-  const fetchZohoItems = useCallback(async (showLoading = true) => {
+  // Fetch Items from items_data collection
+  const fetchItems = useCallback(async (showLoading = true) => {
     if (showLoading) setLoading(true);
     try {
       const params = new URLSearchParams({
         page: page + 1,
         per_page: rowsPerPage,
-        sort_column: sortColumn,
-        sort_order: sortOrder,
+        sort_column: 'name', // Default sort
+        sort_order: 'asc', // Default sort order
         filterInactive: filterInactive // Send boolean as string 'true' or 'false'
       });
       if (searchTerm) {
         params.append('search_text', searchTerm);
       }
 
-      const response = await fetch(`${API_BASE_URL}/zoho/items?${params.toString()}`);
+      const response = await fetch(`${API_BASE_URL}/items?${params.toString()}`);
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.message || 'Failed to fetch Zoho items');
+        throw new Error(errorData.message || 'Failed to fetch items');
       }
       const data = await response.json();
       setZohoItems(data.items || []);
-      // Zoho API returns page_context.total_count for all items, not just current page.
-      // Use current page items length if total_count is not available or appropriate.
-      setZohoItemsFetchedCount(data.page_context ? data.page_context.total_count : (data.items ? data.items.length : 0)); // <--- Update count
-      showSnackbar('Zoho items fetched successfully!', 'success');
+      // Use total count from response
+      setZohoItemsFetchedCount(data.total || (data.items ? data.items.length : 0));
+      showSnackbar('Items fetched successfully!', 'success');
     } catch (error) {
-      console.error('Error fetching Zoho items:', error);
-      showSnackbar(`Error fetching Zoho items: ${error.message}`, 'error');
+      console.error('Error fetching items:', error);
+      showSnackbar(`Error fetching items: ${error.message}`, 'error');
       setZohoItemsFetchedCount(0); // Reset count on error
     } finally {
       if (showLoading) setLoading(false);
     }
-  }, [page, rowsPerPage, searchTerm, sortColumn, sortOrder, filterInactive, showSnackbar]); // Added filterInactive dependency
+  }, [page, rowsPerPage, searchTerm, filterInactive, showSnackbar]);
 
+  // Load items on mount and when dependencies change
   useEffect(() => {
-    if (authStatus && activeTab === 0) { // Only fetch if authenticated and on the Zoho Items tab
-      fetchZohoItems();
+    fetchItems();
+  }, [page, rowsPerPage, searchTerm, filterInactive]);
+
+  // Load Firebase brands and extract manufacturers for ImageManagement
+  useEffect(() => {
+    checkFirebaseAndLoad();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Extract unique manufacturers from items
+  useEffect(() => {
+    if (zohoItems && zohoItems.length > 0) {
+      // Create a map to store unique manufacturers with their original names
+      const manufacturerMap = new Map();
+      
+      zohoItems.forEach(item => {
+        const original = item.manufacturer || item.brand;
+        if (original) {
+          const normalized = normalizeBrandName(original);
+          if (normalized !== 'unknown' && !manufacturerMap.has(normalized)) {
+            manufacturerMap.set(normalized, original);
+          }
+        }
+      });
+      
+      // Convert to array of objects sorted by original name
+      const uniqueManufacturers = Array.from(manufacturerMap.entries())
+        .map(([normalized, original]) => ({ normalized, original }))
+        .sort((a, b) => a.original.toLowerCase().localeCompare(b.original.toLowerCase()));
+      
+      setManufacturers(uniqueManufacturers);
     }
-  }, [authStatus, fetchZohoItems, activeTab]);
+  }, [zohoItems]);
+
+  // Load product images when image dialog opens
+  useEffect(() => {
+    if (imageDialog && selectedProduct) {
+      getProductImages(selectedProduct);
+    }
+  }, [imageDialog, selectedProduct]);
 
   const handleAuthZoho = () => {
     const redirectUri = process.env.REACT_APP_ZOHO_REDIRECT_URI || 'https://zofaire.onrender.com/oauth/callback';
@@ -372,9 +458,9 @@ const ZohoFaireIntegration = () => {
   };
 
   const handleSort = (columnId) => {
-    const isAsc = sortColumn === columnId && sortOrder === 'asc';
-    setSortOrder(isAsc ? 'desc' : 'asc');
-    setSortColumn(columnId);
+    // This function is no longer needed as sorting is handled by backend
+    // For now, we'll just re-fetch with current params
+    fetchItems(true);
   };
 
   // FIX: Corrected logic for filterInactive checkbox
@@ -384,6 +470,287 @@ const ZohoFaireIntegration = () => {
 
 
   const isSelected = (itemId) => selectedItems.has(itemId);
+
+  const handleItemClick = (item) => {
+    setSelectedItem(item);
+    setDetailDialogOpen(true);
+  };
+
+  const handleCloseDetailDialog = () => {
+    setDetailDialogOpen(false);
+    setSelectedItem(null);
+  };
+
+  // Image Management functions
+  const checkFirebaseAndLoad = async () => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/firebase/status`);
+      if (response.ok) {
+        loadFirebaseBrands();
+      } else {
+        console.log('Firebase endpoints not available yet');
+      }
+    } catch (error) {
+      console.log('Firebase not configured:', error);
+    }
+  };
+
+  const loadFirebaseBrands = async () => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/firebase/brands`);
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success) {
+          setFirebaseBrands(data.brands);
+        }
+      }
+    } catch (error) {
+      console.error('Error loading Firebase brands:', error);
+      setSnackbar({ open: true, message: 'Failed to load brands from Firebase', severity: 'error' });
+    }
+  };
+
+  const matchAllImages = async () => {
+    const itemsToMatch = selectedManufacturer === 'all' 
+      ? zohoItems 
+      : zohoItems.filter(item => 
+          normalizeBrandName(item.manufacturer || item.brand) === selectedManufacturer
+        );
+
+    if (itemsToMatch.length === 0) {
+      setSnackbar({ open: true, message: 'No products to match', severity: 'warning' });
+      return;
+    }
+
+    setIsMatching(true);
+    setMatchProgress({ current: 0, total: itemsToMatch.length });
+    
+    const BATCH_SIZE = 50; // Process 50 items at a time
+    const batches = Math.ceil(itemsToMatch.length / BATCH_SIZE);
+    
+    const allResults = {
+      matched: 0,
+      notMatched: 0,
+      errors: 0,
+      products: []
+    };
+
+    try {
+      for (let i = 0; i < batches; i++) {
+        const batch = itemsToMatch.slice(i * BATCH_SIZE, (i + 1) * BATCH_SIZE);
+        
+        const response = await fetch(`${API_BASE_URL}/workflow/match-images`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            products: batch
+          }),
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          allResults.matched += data.matched || 0;
+          allResults.notMatched += data.notMatched || 0;
+          allResults.errors += data.errors || 0;
+          allResults.products.push(...(data.products || []));
+        } else {
+          allResults.errors += batch.length;
+        }
+        
+        setMatchProgress({ current: (i + 1) * BATCH_SIZE, total: itemsToMatch.length });
+      }
+
+      setSnackbar({ 
+        open: true, 
+        message: `Image matching complete! ${allResults.matched} matched, ${allResults.notMatched} not found, ${allResults.errors} errors`, 
+        severity: allResults.errors > 0 ? 'warning' : 'success' 
+      });
+      
+      // Refresh items to show updated image status
+      fetchItems();
+      
+    } catch (error) {
+      console.error('Error matching images:', error);
+      setSnackbar({ open: true, message: `Image matching failed: ${error.message}`, severity: 'error' });
+    } finally {
+      setIsMatching(false);
+      setMatchProgress({ current: 0, total: 0 });
+    }
+  };
+
+  const getProductImages = async (product) => {
+    if (!product || !product.sku) return;
+    
+    try {
+      const response = await fetch(`${API_BASE_URL}/firebase/product-images/${product.sku}`);
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success) {
+          setProductImages(prev => ({
+            ...prev,
+            [product.sku]: data
+          }));
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching product images:', error);
+    }
+  };
+
+  const processAndUploadImages = async () => {
+    if (!selectedProduct || selectedFiles.length === 0) return;
+    
+    setUploading(true);
+    setUploadProgress(0);
+    
+    try {
+      const formData = new FormData();
+      formData.append('sku', selectedProduct.sku);
+      formData.append('brand', normalizeBrandName(selectedProduct.manufacturer || selectedProduct.brand));
+      formData.append('padding', processOptions.padding);
+      formData.append('quality', processOptions.quality);
+      formData.append('createVariants', processOptions.createVariants);
+      
+      selectedFiles.forEach(file => {
+        formData.append('images', file);
+      });
+      
+      const response = await fetch(`${API_BASE_URL}/firebase/upload-images`, {
+        method: 'POST',
+        body: formData
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success) {
+          setSnackbar({ open: true, message: 'Images uploaded successfully!', severity: 'success' });
+          setUploadDialog(false);
+          setSelectedFiles([]);
+          getProductImages(selectedProduct);
+        }
+      } else {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Upload failed');
+      }
+    } catch (error) {
+      console.error('Error uploading images:', error);
+      setSnackbar({ open: true, message: `Upload failed: ${error.message}`, severity: 'error' });
+    } finally {
+      setUploading(false);
+      setUploadProgress(0);
+    }
+  };
+
+  const runCompleteSync = async () => {
+    setSyncStatus('running');
+    try {
+      const response = await fetch(`${API_BASE_URL}/workflow/complete-sync`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setSnackbar({ 
+          open: true, 
+          message: `Complete sync finished! ${data.summary?.matched || 0} items matched with images.`, 
+          severity: 'success' 
+        });
+        fetchItems(); // Refresh the items list
+      } else {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Complete sync failed');
+      }
+    } catch (error) {
+      console.error('Error in complete sync:', error);
+      setSnackbar({ open: true, message: `Complete sync failed: ${error.message}`, severity: 'error' });
+    } finally {
+      setSyncStatus('idle');
+    }
+  };
+
+  const getImageStatus = (product) => {
+    const images = productImages[product.sku];
+    if (images && images.images && images.images.length > 0) {
+      return { status: 'matched', count: images.images.length };
+    }
+    return { status: 'missing', count: 0 };
+  };
+
+  const handleFileSelect = (event) => {
+    setSelectedFiles(Array.from(event.target.files));
+  };
+
+  const handleBatchFileSelect = (event) => {
+    setBatchFiles(Array.from(event.target.files));
+  };
+
+  const handleBatchUpload = async () => {
+    if (batchFiles.length === 0) {
+      setSnackbar({ open: true, message: 'Please select images to upload', severity: 'warning' });
+      return;
+    }
+    
+    if (!batchSelectedBrand) {
+      setSnackbar({ open: true, message: 'Please select a brand', severity: 'warning' });
+      return;
+    }
+    
+    setBatchUploading(true);
+    setBatchUploadProgress({ current: 0, total: batchFiles.length });
+    
+    try {
+      const formData = new FormData();
+      formData.append('brand', normalizeBrandName(batchSelectedBrand));
+      
+      // Add all files
+      batchFiles.forEach(file => {
+        formData.append('images', file);
+      });
+      
+      const response = await fetch(`${API_BASE_URL}/firebase/batch-upload-images`, {
+        method: 'POST',
+        body: formData
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success) {
+          setSnackbar({
+            open: true,
+            message: `Batch upload complete! ${data.summary.successful} succeeded, ${data.summary.failed} failed`,
+            severity: data.summary.failed > 0 ? 'warning' : 'success'
+          });
+          
+          // Close dialog and reset
+          setBatchUploadDialog(false);
+          setBatchFiles([]);
+          setBatchSelectedBrand('');
+          
+          // Refresh brands list
+          loadFirebaseBrands();
+          
+          // If we're viewing this brand, refresh the image matching
+          if (selectedManufacturer === normalizeBrandName(batchSelectedBrand)) {
+            matchAllImages();
+          }
+        }
+      } else {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Batch upload failed');
+      }
+    } catch (error) {
+      console.error('Error in batch upload:', error);
+      setSnackbar({ open: true, message: `Batch upload failed: ${error.message}`, severity: 'error' });
+    } finally {
+      setBatchUploading(false);
+      setBatchUploadProgress({ current: 0, total: 0 });
+    }
+  };
 
   const filteredItems = useMemo(() => {
     // Note: Filtering by searchTerm is done on current page data.
@@ -422,7 +789,7 @@ const ZohoFaireIntegration = () => {
       }
 
       setSyncStatus('complete'); // Set final status
-      fetchZohoItems(true); // Refresh items after successful sync
+      fetchItems(true); // Refresh items after successful sync
     } catch (error) {
       console.error('Complete sync failed:', error);
       let errorMessage = 'Complete sync failed.';
@@ -476,7 +843,7 @@ const ZohoFaireIntegration = () => {
       const data = await response.json();
       showSnackbar(`Successfully uploaded ${data.uploaded || selected.length} items to Faire!`, 'success');
       // Optionally refresh items or update UI
-      fetchZohoItems(true);
+      fetchItems(true);
     } catch (error) {
       showSnackbar(`Upload to Faire failed: ${error.message}`, 'error');
     } finally {
@@ -547,17 +914,18 @@ const ZohoFaireIntegration = () => {
             <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
               <Tooltip 
                 title={
-                  authStatus 
-                    ? 'Connected to Zoho Inventory' 
-                    : 'Not connected. Click to authenticate with Zoho.'
+                  // authStatus 
+                  //   ? 'Connected to Zoho Inventory' 
+                  //   : 'Not connected. Click to authenticate with Zoho.'
+                  'Zoho Authentication'
                 } 
                 placement="top"
                 arrow
               >
                 <StatusBadge
                   theme={theme}
-                  connected={authStatus}
-                  onClick={!authStatus ? handleAuthZoho : undefined}
+                  // connected={authStatus}
+                  onClick={handleAuthZoho}
                 >
                   <Avatar 
                     src="/logos/zoho-inventory.png" 
@@ -576,7 +944,8 @@ const ZohoFaireIntegration = () => {
                 sx={{ 
                   mt: 1.5, 
                   fontWeight: 600,
-                  color: authStatus ? theme.palette.success.main : theme.palette.error.main
+                  color: // authStatus ? theme.palette.success.main : theme.palette.error.main
+                  'info' // Placeholder for Zoho status
                 }}
               >
                 Zoho
@@ -628,33 +997,28 @@ const ZohoFaireIntegration = () => {
               </Typography>
             </Box>
           </Grid>
-          
+
           {/* Firebase Status Badge */}
           <Grid item>
             <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
               <Tooltip 
                 title={
-                  firebaseStatus 
-                    ? 'Firebase Storage is connected' 
-                    : 'Firebase Storage not configured. Images cannot be uploaded.'
+                  firebaseBrands.length > 0
+                    ? `Connected to Firebase (${firebaseBrands.length} brands available)` 
+                    : 'Firebase not configured. Click to check connection.'
                 } 
                 placement="top"
                 arrow
               >
                 <StatusBadge
                   theme={theme}
-                  connected={firebaseStatus}
-                  sx={{ 
-                    overflow: 'visible',
-                    '& .firebase-flame': {
-                      animation: firebaseStatus ? `${flameWobble} 1.5s ease-in-out infinite` : 'none'
-                    }
-                  }}
+                  connected={firebaseBrands.length > 0}
+                  onClick={firebaseBrands.length === 0 ? checkFirebaseAndLoad : undefined}
                 >
                   <Avatar 
                     src="/logos/firebase.png" 
                     alt="Firebase" 
-                    className="status-icon firebase-flame"
+                    className="status-icon"
                     sx={{ 
                       bgcolor: 'white',
                       p: 1,
@@ -668,7 +1032,7 @@ const ZohoFaireIntegration = () => {
                 sx={{ 
                   mt: 1.5, 
                   fontWeight: 600,
-                  color: firebaseStatus ? theme.palette.success.main : theme.palette.error.main
+                  color: firebaseBrands.length > 0 ? theme.palette.success.main : theme.palette.error.main
                 }}
               >
                 Firebase
@@ -678,168 +1042,160 @@ const ZohoFaireIntegration = () => {
         </Grid>
 
         {/* Tabs for Navigation */}
-        <Tabs
-          value={activeTab}
-          onChange={(event, newValue) => setActiveTab(newValue)}
-          aria-label="integration tabs"
-          sx={{ mb: 3, borderBottom: `1px solid ${theme.palette.divider}` }}
-        >
-          <Tab label="Zoho Items" icon={<InventoryIcon />} iconPosition="start" />
-          <Tab label="Image Management" icon={<ImageIcon />} iconPosition="start" />
-        </Tabs>
+        {/* Removed as per edit hint */}
 
         {/* Zoho Items Tab */}
-        {activeTab === 0 && (
-          <>
-            {/* Batch Action Bar - Shows when items are selected */}
-            {selectedItems.size > 0 && (
-            <Paper 
-              elevation={3} 
-              sx={{ 
-                position: 'sticky',
-                bottom: 20,
-                left: '50%',
-                transform: 'translateX(-50%)',
-                zIndex: 1200,
-                p: 2,
-                borderRadius: 3,
-                background: alpha(theme.palette.primary.main, 0.95),
-                backdropFilter: 'blur(10px)',
-                display: 'flex',
-                alignItems: 'center',
-                gap: 2,
-                maxWidth: 'fit-content',
-                mx: 'auto'
-              }}
-            >
-              <Typography variant="body2" sx={{ color: 'white', fontWeight: 600 }}>
-                {selectedItems.size} items selected
-              </Typography>
+        {/* This section is now the main view */}
+        <Paper 
+          elevation={2} 
+          sx={{ 
+            borderRadius: 3,
+            overflow: 'hidden',
+            boxShadow: theme.shadows[4]
+          }}
+        >
+          <Toolbar sx={{ 
+            pl: { sm: 2 }, 
+            pr: { xs: 1, sm: 1 },
+            backgroundColor: alpha(theme.palette.primary.main, 0.05),
+            borderBottom: `1px solid ${theme.palette.divider}`
+          }}>
+            <Typography variant="h6" component="div" sx={{ flexGrow: 1, fontWeight: 600 }}>
+              Items ({zohoItems.length})
+            </Typography>
+            
+            <TextField
+              label="Search Items"
+              variant="outlined"
+              size="small"
+              value={searchTerm}
+              onChange={handleSearchChange}
+              sx={{ mr: 2, flexShrink: 0 }}
+            />
+            
+            <FormControlLabel
+              control={
+                <Checkbox
+                  checked={filterInactive}
+                  onChange={handleFilterInactiveChange}
+                  color="primary"
+                />
+              }
+              label="Active Items Only"
+              sx={{ mr: 2 }}
+            />
+            
+            <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', flexWrap: 'wrap' }}>
               <Button
-                variant="contained"
-                size="small"
-                sx={{ 
-                  bgcolor: 'white', 
-                  color: theme.palette.primary.main,
-                  '&:hover': { bgcolor: alpha(theme.palette.common.white, 0.9) }
-                }}
-                startIcon={<UploadIcon />}
-                onClick={handleUploadToFaire}
+                variant="outlined"
+                startIcon={<RefreshIcon />}
+                onClick={fetchItems}
                 disabled={loading}
               >
-                Upload to Faire
+                Refresh
               </Button>
+              
+              <FormControl size="small" sx={{ minWidth: 150 }}>
+                <InputLabel id="manufacturer-filter-label">
+                  <FilterListIcon sx={{ fontSize: 16, mr: 0.5 }} />
+                  Manufacturer
+                </InputLabel>
+                <Select
+                  labelId="manufacturer-filter-label"
+                  value={selectedManufacturer}
+                  onChange={(e) => setSelectedManufacturer(e.target.value)}
+                  label="Manufacturer"
+                  renderValue={(selected) => {
+                    if (selected === 'all') return 'All Manufacturers';
+                    // Find the manufacturer object
+                    const mfr = manufacturers.find(m => m.normalized === selected);
+                    const displayName = mfr ? mfr.original : selected;
+                    
+                    return (
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <BrandAvatar brand={displayName} size={20} />
+                        <span>{displayName}</span>
+                      </Box>
+                    );
+                  }}
+                >
+                  <MenuItem value="all">All Manufacturers</MenuItem>
+                  <Divider />
+                  {manufacturers.map(mfr => (
+                    <MenuItem key={mfr.normalized} value={mfr.normalized}>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <BrandAvatar brand={mfr.original} size={24} />
+                        <span>{mfr.original}</span>
+                      </Box>
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+              
               <Button
-                variant="contained"
-                size="small"
-                sx={{ 
-                  bgcolor: 'white', 
-                  color: theme.palette.primary.main,
-                  '&:hover': { bgcolor: alpha(theme.palette.common.white, 0.9) }
-                }}
+                variant="outlined"
                 startIcon={<ImageIcon />}
-                onClick={() => {
-                  setActiveTab(1);
-                  showSnackbar('Navigate to Image Management to match images', 'info');
-                }}
+                onClick={matchAllImages}
+                disabled={loading || isMatching}
               >
                 Match Images
               </Button>
-              <IconButton
-                size="small"
-                sx={{ color: 'white' }}
-                onClick={() => {
-                  setSelectedItems(new Set());
-                  showSnackbar('Selection cleared', 'info');
-                }}
-              >
-                <CloseIcon />
-              </IconButton>
-            </Paper>
-          )}
-
-          <TableContainer 
-            component={Paper} 
-            elevation={2} 
-            sx={{ 
-              mt: 3, 
-              borderRadius: 2,
-              maxHeight: '70vh',
-              '& .MuiTableRow-root:hover': {
-                backgroundColor: alpha(theme.palette.primary.main, 0.04),
-                transition: 'background-color 0.2s ease'
-              }
-            }}
-          >
-            <Toolbar
-              sx={{
-                pl: { sm: 2 },
-                pr: { xs: 1, sm: 1 },
-                bgcolor: alpha(theme.palette.primary.main, 0.05),
-                borderBottom: `1px solid ${theme.palette.divider}`
-              }}
-            >
-              <Typography
-                sx={{ flex: '1 1 100%', color: theme.palette.primary.main, fontWeight: 'bold' }}
-                variant="h6"
-                id="tableTitle"
-                component="div"
-              >
-                Zoho Inventory Items
-                {zohoItemsFetchedCount > 0 && (
-                  <Typography variant="body2" component="span" sx={{ ml: 2, fontWeight: 'normal', color: 'text.secondary' }}>
-                    ({zohoItemsFetchedCount} total {filterInactive ? 'active' : ''} items - Page {page + 1} of {Math.ceil(zohoItemsFetchedCount / rowsPerPage)})
-                  </Typography>
-                )}
-              </Typography>
-              <TextField
-                label="Search Items"
-                variant="outlined"
-                size="small"
-                value={searchTerm}
-                onChange={handleSearchChange}
-                sx={{ mr: 2, flexShrink: 0 }}
-              />
-              <FormControlLabel
-                control={
-                  <Checkbox
-                    checked={filterInactive} // <--- Corrected logic for filterInactive
-                    onChange={handleFilterInactiveChange} // <--- Corrected handler
-                    color="primary"
-                  />
-                }
-                label="Active Items Only"
-                sx={{ mr: 2 }}
-              />
-              <Tooltip title="Refresh Zoho Items">
-                <IconButton onClick={() => fetchZohoItems(true)} disabled={loading}>
-                  <RefreshIcon />
-                </IconButton>
-              </Tooltip>
+              
               <Button
                 variant="contained"
-                color="primary"
-                onClick={handleCompleteSync}
-                disabled={loading} // Keep disabled while any loading is happening
-                startIcon={loading ? <CircularProgress size={20} color="inherit" /> : <CloudUploadIcon />}
-                sx={{ ml: 2 }}
+                startIcon={<CloudSyncIcon />}
+                onClick={runCompleteSync}
+                disabled={loading || isMatching || syncStatus === 'running'}
               >
-                {getSyncButtonText()}
+                {syncStatus === 'running' ? 'Syncing...' : 'Complete Sync'}
               </Button>
-              {selectedItems.size > 0 && (
-                <Button
-                  variant="contained"
-                  color="secondary"
-                  startIcon={<UploadIcon />}
-                  sx={{ ml: 2 }}
-                  onClick={handleUploadToFaire}
-                  disabled={loading}
-                >
-                  Upload to Faire ({selectedItems.size})
-                </Button>
-              )}
-            </Toolbar>
+              
+              <Button
+                variant="contained"
+                color="secondary"
+                startIcon={<AddPhotoIcon />}
+                onClick={() => setBatchUploadDialog(true)}
+                disabled={loading || isMatching}
+              >
+                Batch Upload
+              </Button>
+            </Box>
+            <Button
+              variant="contained"
+              color="primary"
+              onClick={handleCompleteSync}
+              disabled={loading} // Keep disabled while any loading is happening
+              startIcon={loading ? <CircularProgress size={20} color="inherit" /> : <CloudUploadIcon />}
+              sx={{ ml: 2 }}
+            >
+              {getSyncButtonText()}
+            </Button>
+            {selectedItems.size > 0 && (
+              <Button
+                variant="contained"
+                color="secondary"
+                startIcon={<UploadIcon />}
+                sx={{ ml: 2 }}
+                onClick={handleUploadToFaire}
+                disabled={loading}
+              >
+                Upload to Faire ({selectedItems.size})
+              </Button>
+            )}
+          </Toolbar>
 
+          {(loading || isMatching) && (
+            <Box sx={{ px: 2, pb: 1 }}>
+              <LinearProgress />
+              {isMatching && matchProgress.total > 0 && (
+                <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
+                  Matching images: {matchProgress.current} / {matchProgress.total}
+                </Typography>
+              )}
+            </Box>
+          )}
+
+          <TableContainer>
             <Table aria-label="zoho items table" stickyHeader>
               <TableHead>
                 <TableRow
@@ -870,7 +1226,7 @@ const ZohoFaireIntegration = () => {
                       }
                     }}
                   >
-                    Item Name {sortColumn === 'name' ? (sortOrder === 'asc' ? '▲' : '▼') : ''}
+                    Item Name
                   </TableCell>
                   <TableCell 
                     onClick={() => handleSort('sku')} 
@@ -882,7 +1238,7 @@ const ZohoFaireIntegration = () => {
                       }
                     }}
                   >
-                    SKU {sortColumn === 'sku' ? (sortOrder === 'asc' ? '▲' : '▼') : ''}
+                    SKU
                   </TableCell>
                   <TableCell>Status</TableCell>
                   <TableCell align="center">Stock</TableCell>
@@ -910,33 +1266,22 @@ const ZohoFaireIntegration = () => {
                       const isItemSelected = isSelected(item.item_id);
                       return (
                         <TableRow
-                          key={item.item_id}
                           hover
-                          role="checkbox"
-                          tabIndex={-1}
-                          selected={isItemSelected}
+                          key={item.item_id}
+                          selected={isSelected(item.item_id)}
                           sx={{
-                            '&.Mui-selected': {
-                              backgroundColor: alpha(theme.palette.primary.main, 0.08),
-                              '&:hover': {
-                                backgroundColor: alpha(theme.palette.primary.main, 0.12),
-                              },
-                            },
                             cursor: 'pointer',
+                            '&:hover': {
+                              backgroundColor: alpha(theme.palette.primary.main, 0.08),
+                            },
                           }}
+                          onClick={() => handleItemClick(item)}
                         >
                           <TableCell padding="checkbox">
                             <Checkbox
-                              checked={isItemSelected}
+                              checked={isSelected(item.item_id)}
                               onChange={(event) => handleSelectItem(event, item.item_id)}
-                              icon={<RadioButtonUncheckedIcon />}
-                              checkedIcon={<CheckCircleOutlineIcon />}
-                              sx={{
-                                color: theme.palette.primary.main,
-                                '&.Mui-checked': {
-                                  color: theme.palette.primary.main,
-                                },
-                              }}
+                              onClick={(e) => e.stopPropagation()} // Prevent row click when clicking checkbox
                             />
                           </TableCell>
                           <TableCell>
@@ -946,6 +1291,9 @@ const ZohoFaireIntegration = () => {
                                 <Typography variant="body2" sx={{ fontWeight: 500 }}>
                                   {item.name}
                                 </Typography>
+                                <Tooltip title="View details">
+                                  <VisibilityIcon fontSize="small" color="action" />
+                                </Tooltip>
                                 <Typography variant="caption" color="text.secondary">
                                   {item.brand || item.manufacturer || 'No Brand'}
                                 </Typography>
@@ -1000,13 +1348,34 @@ const ZohoFaireIntegration = () => {
                           </TableCell>
                           <TableCell align="center">
                             <Box sx={{ display: 'flex', gap: 1, justifyContent: 'center' }}>
+                              {(() => {
+                                const imageStatus = getImageStatus(item);
+                                return imageStatus.status === 'matched' ? (
+                                  <Chip
+                                    size="small"
+                                    icon={<CheckCircleIcon />}
+                                    label={`${imageStatus.count} imgs`}
+                                    color="success"
+                                    variant="outlined"
+                                  />
+                                ) : (
+                                  <Chip
+                                    size="small"
+                                    icon={<WarningIcon />}
+                                    label="No images"
+                                    color="warning"
+                                    variant="outlined"
+                                  />
+                                );
+                              })()}
                               <Tooltip title="Manage product images">
                                 <IconButton
                                   size="small"
                                   color="primary"
                                   onClick={(e) => {
                                     e.stopPropagation();
-                                    setActiveTab(1);
+                                    setSelectedProduct(item);
+                                    setImageDialog(true);
                                   }}
                                 >
                                   <ImageIcon fontSize="small" />
@@ -1015,11 +1384,10 @@ const ZohoFaireIntegration = () => {
                               <Tooltip title="View product details">
                                 <IconButton
                                   size="small"
-                                  color="default"
+                                  color="info"
                                   onClick={(e) => {
                                     e.stopPropagation();
-                                    // TODO: Implement view details
-                                    showSnackbar('View details coming soon', 'info');
+                                    handleItemClick(item);
                                   }}
                                 >
                                   <VisibilityIcon fontSize="small" />
@@ -1028,36 +1396,12 @@ const ZohoFaireIntegration = () => {
                             </Box>
                           </TableCell>
                           <TableCell align="center">
-                            {item.uploaded_to_faire ? (
-                              <Chip
-                                icon={<CheckCircleIcon sx={{ fontSize: 16 }} />}
-                                label="Uploaded"
-                                size="small"
-                                sx={{
-                                  backgroundColor: alpha(theme.palette.success.main, 0.1),
-                                  color: theme.palette.success.dark,
-                                  border: `1px solid ${alpha(theme.palette.success.main, 0.3)}`,
-                                  fontWeight: 600,
-                                  '& .MuiChip-icon': {
-                                    color: theme.palette.success.main,
-                                  },
-                                }}
-                              />
-                            ) : (
-                              <Chip
-                                icon={<CloudUploadIcon sx={{ fontSize: 16 }} />}
-                                label="Not Uploaded"
-                                size="small"
-                                sx={{
-                                  backgroundColor: alpha(theme.palette.grey[500], 0.1),
-                                  color: theme.palette.grey[700],
-                                  border: `1px solid ${alpha(theme.palette.grey[500], 0.3)}`,
-                                  '& .MuiChip-icon': {
-                                    color: theme.palette.grey[600],
-                                  },
-                                }}
-                              />
-                            )}
+                            <Chip
+                              label="Not Uploaded"
+                              size="small"
+                              color="default"
+                              variant="outlined"
+                            />
                           </TableCell>
                         </TableRow>
                       );
@@ -1065,29 +1409,347 @@ const ZohoFaireIntegration = () => {
                 )}
               </TableBody>
             </Table>
-
-            <TablePagination
-              rowsPerPageOptions={[50, 100, 200]}
-              component="div"
-              count={zohoItemsFetchedCount} // Use total count from API
-              rowsPerPage={rowsPerPage}
-              page={page}
-              onPageChange={handleChangePage}
-              onRowsPerPageChange={handleChangeRowsPerPage}
-            />
           </TableContainer>
-          </>
-        )}
+          
+          <TablePagination
+            rowsPerPageOptions={[50, 100, 200]}
+            component="div"
+            count={zohoItemsFetchedCount}
+            rowsPerPage={rowsPerPage}
+            page={page}
+            onPageChange={handleChangePage}
+            onRowsPerPageChange={handleChangeRowsPerPage}
+          />
+        </Paper>
 
         {/* Image Management Tab */}
-        {activeTab === 1 && (
-          <ImageManagement
-            zohoItems={zohoItems}
-            onAlert={showSnackbar}
-            onRefreshItems={() => fetchZohoItems(true)}
-          />
-        )}
+        {/* This section is now the main view */}
       </Paper>
+
+      {/* Item Detail Dialog */}
+      {selectedItem && (
+        <ItemDetail
+          item={selectedItem}
+          open={detailDialogOpen}
+          onClose={handleCloseDetailDialog}
+          onAlert={showSnackbar}
+          onRefreshItems={() => fetchItems(true)}
+        />
+      )}
+
+      {/* Image View Dialog */}
+      <Dialog
+        open={imageDialog}
+        onClose={() => setImageDialog(false)}
+        maxWidth="md"
+        fullWidth
+      >
+        <DialogTitle>
+          {selectedProduct?.name} - Images
+          <Typography variant="caption" display="block">
+            SKU: {selectedProduct?.sku}
+          </Typography>
+        </DialogTitle>
+        
+        <DialogContent>
+          {loading ? (
+            <Box display="flex" justifyContent="center" p={3}>
+              <CircularProgress />
+            </Box>
+          ) : productImages[selectedProduct?.sku]?.images?.length > 0 ? (
+            <ImageList cols={3} gap={8}>
+              {productImages[selectedProduct.sku].images
+                .filter(img => !img.isVariant)
+                .map((image, index) => (
+                  <ImageListItem key={index}>
+                    <img
+                      src={image.url}
+                      alt={image.name}
+                      loading="lazy"
+                      style={{ objectFit: 'contain', backgroundColor: '#f5f5f5' }}
+                    />
+                    <ImageListItemBar
+                      title={image.name}
+                      subtitle={`${(image.size / 1024).toFixed(1)} KB`}
+                      actionIcon={
+                        <IconButton
+                          sx={{ color: 'rgba(255, 255, 255, 0.54)' }}
+                          onClick={() => window.open(image.url, '_blank')}
+                        >
+                          <DownloadIcon />
+                        </IconButton>
+                      }
+                    />
+                  </ImageListItem>
+                ))}
+            </ImageList>
+          ) : (
+            <Alert severity="warning">
+              No images found for this product
+            </Alert>
+          )}
+        </DialogContent>
+        
+        <DialogActions>
+          <Button onClick={() => setImageDialog(false)}>Close</Button>
+          {productImages[selectedProduct?.sku]?.images?.length === 0 && (
+            <Button
+              variant="contained"
+              onClick={() => {
+                setImageDialog(false);
+                setUploadDialog(true);
+              }}
+            >
+              Upload Images
+            </Button>
+          )}
+        </DialogActions>
+      </Dialog>
+
+      {/* Upload Dialog */}
+      <Dialog
+        open={uploadDialog}
+        onClose={() => setUploadDialog(false)}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>
+          Upload Images - {selectedProduct?.name}
+        </DialogTitle>
+        
+        <DialogContent>
+          <Box sx={{ mt: 2 }}>
+            <input
+              accept="image/*"
+              style={{ display: 'none' }}
+              id="image-file-input"
+              multiple
+              type="file"
+              onChange={handleFileSelect}
+            />
+            <label htmlFor="image-file-input">
+              <Button
+                variant="outlined"
+                component="span"
+                startIcon={<AddPhotoIcon />}
+                fullWidth
+              >
+                Select Images ({selectedFiles.length} selected)
+              </Button>
+            </label>
+            
+            {selectedFiles.length > 0 && (
+              <List dense sx={{ mt: 2 }}>
+                {selectedFiles.map((file, index) => (
+                  <ListItem key={index}>
+                    <ListItemIcon>
+                      <ImageIcon />
+                    </ListItemIcon>
+                    <ListItemText
+                      primary={file.name}
+                      secondary={`${(file.size / 1024).toFixed(1)} KB`}
+                    />
+                  </ListItem>
+                ))}
+              </List>
+            )}
+            
+            <Divider sx={{ my: 2 }} />
+            
+            <Typography variant="subtitle2" gutterBottom>
+              Processing Options
+            </Typography>
+            
+            <Grid container spacing={2}>
+              <Grid item xs={6}>
+                <TextField
+                  fullWidth
+                  label="Padding (px)"
+                  type="number"
+                  value={processOptions.padding}
+                  onChange={(e) => setProcessOptions(prev => ({
+                    ...prev,
+                    padding: parseInt(e.target.value) || 50
+                  }))}
+                />
+              </Grid>
+              
+              <Grid item xs={6}>
+                <TextField
+                  fullWidth
+                  label="Quality (%)"
+                  type="number"
+                  value={processOptions.quality}
+                  onChange={(e) => setProcessOptions(prev => ({
+                    ...prev,
+                    quality: parseInt(e.target.value) || 85
+                  }))}
+                />
+              </Grid>
+            </Grid>
+          </Box>
+          
+          {uploading && (
+            <Box sx={{ mt: 2 }}>
+              <LinearProgress variant="determinate" value={uploadProgress} />
+            </Box>
+          )}
+        </DialogContent>
+        
+        <DialogActions>
+          <Button onClick={() => setUploadDialog(false)} disabled={uploading}>
+            Cancel
+          </Button>
+          <Button
+            variant="contained"
+            onClick={processAndUploadImages}
+            disabled={selectedFiles.length === 0 || uploading}
+            startIcon={uploading ? <CircularProgress size={20} /> : <CloudUploadIcon />}
+          >
+            {uploading ? 'Processing...' : 'Process & Upload'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Batch Upload Dialog */}
+      <Dialog
+        open={batchUploadDialog}
+        onClose={() => setBatchUploadDialog(false)}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>
+          <Box display="flex" alignItems="center" gap={1}>
+            <AddPhotoIcon color="primary" />
+            <Typography variant="h6">Batch Image Upload</Typography>
+          </Box>
+        </DialogTitle>
+        
+        <DialogContent>
+          <Box sx={{ mt: 2 }}>
+            <Typography variant="body2" color="text.secondary" gutterBottom>
+              Upload multiple product images at once. Images should be named with their SKU 
+              (e.g., "ABC123.jpg" or "ABC123_main.jpg").
+            </Typography>
+            
+            <FormControl fullWidth sx={{ mt: 3, mb: 3 }}>
+              <InputLabel id="batch-brand-select-label">Select Brand</InputLabel>
+              <Select
+                labelId="batch-brand-select-label"
+                value={batchSelectedBrand}
+                onChange={(e) => setBatchSelectedBrand(e.target.value)}
+                label="Select Brand"
+                renderValue={(selected) => {
+                  if (!selected) return '';
+                  return (
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                      <BrandAvatar brand={selected} size={20} />
+                      <span>{selected}</span>
+                    </Box>
+                  );
+                }}
+              >
+                {(() => {
+                  // Combine Firebase brands with manufacturers, avoiding duplicates
+                  const brandSet = new Map();
+                  
+                  // Add Firebase brands
+                  firebaseBrands.forEach(brand => {
+                    const normalized = normalizeBrandName(brand);
+                    if (!brandSet.has(normalized)) {
+                      brandSet.set(normalized, brand);
+                    }
+                  });
+                  
+                  // Add manufacturers
+                  manufacturers.forEach(mfr => {
+                    if (!brandSet.has(mfr.normalized)) {
+                      brandSet.set(mfr.normalized, mfr.original);
+                    }
+                  });
+                  
+                  // Convert to sorted array
+                  return Array.from(brandSet.entries())
+                    .map(([normalized, original]) => ({ normalized, original }))
+                    .sort((a, b) => a.original.toLowerCase().localeCompare(b.original.toLowerCase()))
+                    .map(brand => (
+                      <MenuItem key={brand.original} value={brand.original}>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                          <BrandAvatar brand={brand.original} size={24} />
+                          <span>{brand.original}</span>
+                        </Box>
+                      </MenuItem>
+                    ));
+                })()}
+              </Select>
+            </FormControl>
+            
+            <input
+              accept="image/*"
+              style={{ display: 'none' }}
+              id="batch-image-file-input"
+              multiple
+              type="file"
+              onChange={handleBatchFileSelect}
+            />
+            <label htmlFor="batch-image-file-input">
+              <Button
+                variant="outlined"
+                component="span"
+                startIcon={<AddPhotoIcon />}
+                fullWidth
+                size="large"
+              >
+                Select Images ({batchFiles.length} selected)
+              </Button>
+            </label>
+            
+            {batchFiles.length > 0 && (
+              <Box sx={{ mt: 2, maxHeight: 200, overflow: 'auto' }}>
+                <List dense>
+                  {batchFiles.map((file, index) => (
+                    <ListItem key={index}>
+                      <ListItemIcon>
+                        <ImageIcon color="primary" />
+                      </ListItemIcon>
+                      <ListItemText
+                        primary={file.name}
+                        secondary={`${(file.size / 1024 / 1024).toFixed(2)} MB`}
+                      />
+                    </ListItem>
+                  ))}
+                </List>
+                <Typography variant="caption" color="text.secondary" sx={{ mt: 1 }}>
+                  Total size: {(batchFiles.reduce((acc, file) => acc + file.size, 0) / 1024 / 1024).toFixed(2)} MB
+                </Typography>
+              </Box>
+            )}
+          </Box>
+          
+          {batchUploading && (
+            <Box sx={{ mt: 3 }}>
+              <LinearProgress />
+              <Typography variant="body2" color="text.secondary" sx={{ mt: 1, textAlign: 'center' }}>
+                Processing images... Please wait
+              </Typography>
+            </Box>
+          )}
+        </DialogContent>
+        
+        <DialogActions>
+          <Button onClick={() => setBatchUploadDialog(false)} disabled={batchUploading}>
+            Cancel
+          </Button>
+          <Button
+            variant="contained"
+            onClick={handleBatchUpload}
+            disabled={batchFiles.length === 0 || !batchSelectedBrand || batchUploading}
+            startIcon={batchUploading ? <CircularProgress size={20} /> : <CloudUploadIcon />}
+          >
+            {batchUploading ? 'Uploading...' : 'Upload & Process'}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 };
