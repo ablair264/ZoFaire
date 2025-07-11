@@ -337,7 +337,7 @@ async function matchProductsWithImages(products) {
           // Save to Firestore regardless of whether images were found
           await saveItemToFirestore(product, images);
 
-          // Also update item_data collection by finding the record with matching SKU
+          // Also update items_data collection by finding the record with matching SKU
           try {
             const { db } = initializeFirebase();
             if (db && product.sku) {
@@ -362,13 +362,13 @@ async function matchProductsWithImages(products) {
                   hasImages: images.length > 0,
                   lastUpdated: admin.firestore.FieldValue.serverTimestamp(),
                 });
-                console.log(`✅ Updated item_data for SKU ${product.sku} with ${images.length} images`);
+                console.log(`✅ Updated items_data for SKU ${product.sku} with ${images.length} images`);
               } else {
-                console.warn(`⚠️  No item_data document found for SKU ${product.sku}`);
+                console.warn(`⚠️  No items_data document found for SKU ${product.sku}`);
               }
             }
           } catch (err) {
-            console.error(`❌ Error updating item_data for SKU ${product.sku}:`, err.message);
+            console.error(`❌ Error updating items_data for SKU ${product.sku}:`, err.message);
           }
           
           if (images.length > 0) {
