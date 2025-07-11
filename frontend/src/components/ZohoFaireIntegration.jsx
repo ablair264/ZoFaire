@@ -149,7 +149,7 @@ const ZohoFaireIntegration = () => {
     const clientId = process.env.REACT_APP_ZOHO_CLIENT_ID;
 
     // Confirmed scopes are correct as per user's last provided file and previous statement
-    const scope = 'ZohoInventory.items.READ,ZohoInventory.items.CREATE,ZohoInventory.items.UPDATE,ZohoInventory.CompositeItems.READ,ZohoInventory.CompositeItems.CREATE,ZohoInventory.CompositeItems.UPDATE,ZohoInventory.settings.READ,ZohoInventory.settings.CREATE,ZohoInventory.settings.UPDATE,ZohoInventory.organizations.READ,aaaserver.profile.READ';
+    const scope = 'ZohoInventory.FullAccess.all';
 
     const authUrl = `${zohoAuthUrl}?scope=${scope}&client_id=${clientId}&response_type=code&redirect_uri=${redirectUri}&access_type=offline&prompt=consent`;
 
