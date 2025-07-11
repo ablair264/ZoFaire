@@ -22,7 +22,9 @@ import {
   Toolbar,
   IconButton,
   Tooltip,
-  LinearProgress
+  LinearProgress,
+  Tabs,
+  Tab
 } from '@mui/material';
 import {
   Refresh as RefreshIcon,
@@ -30,8 +32,10 @@ import {
   Inventory as InventoryIcon,
   CloudUpload as CloudUploadIcon,
   Schedule as ScheduleIcon,
-  CheckCircle as CheckCircleIcon
+  CheckCircle as CheckCircleIcon,
+  Image as ImageIcon
 } from '@mui/icons-material';
+import ImageManagement from './ImageManagement';
 
 const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'https://zofaire.onrender.com/api';
 
@@ -54,6 +58,7 @@ const ZohoFaireIntegration = () => {
   const [alerts, setAlerts] = useState([]);
   const [authStatus, setAuthStatus] = useState(null);
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
+  const [activeTab, setActiveTab] = useState(0);
 
   // Check authentication status
   const checkAuthStatus = useCallback(async () => {
@@ -520,7 +525,13 @@ const ZohoFaireIntegration = () => {
       {/* Controls */}
       <Card sx={{ mb: 3 }}>
         <CardContent>
-          <Toolbar disableGutters>
+          <Tabs value={activeTab} onChange={(e, newValue) => setActiveTab(newValue)} sx={{ mb: 2 }}>
+            <Tab label="Products" />
+            <Tab label="Image Management" />
+          </Tabs>
+          
+          {activeTab === 0 && (
+            <Toolbar disableGutters>
             <TextField
               fullWidth
               variant="outlined"
@@ -574,7 +585,7 @@ const ZohoFaireIntegration = () => {
               {uploading ? 'Uploading...' : `Upload Selected (${selectedItems.size})`}
             </Button>
           </Toolbar>
-          
+          )}          
           {uploading && (
             <Box sx={{ mt: 2 }}>
               <LinearProgress variant="determinate" value={uploadProgress} />
@@ -587,7 +598,8 @@ const ZohoFaireIntegration = () => {
       </Card>
 
       {/* Items Table */}
-      <TableContainer component={Paper}>
+      {activeTab === 0 && (
+        <TableContainer component={Paper}>
         <Table>
           <TableHead>
             <TableRow>
@@ -604,6 +616,7 @@ const ZohoFaireIntegration = () => {
               <TableCell>Category</TableCell>
               <TableCell align="right">Price</TableCell>
               <TableCell align="right">Stock</TableCell>
+              <TableCell>Images</TableCell>
               <TableCell>Faire Status</TableCell>
             </TableRow>
           </TableHead>
@@ -660,6 +673,15 @@ const ZohoFaireIntegration = () => {
                   </TableCell>
                   <TableCell align="right">{item.stock_on_hand}</TableCell>
                   <TableCell>
+                    <Chip
+                      icon={<ImageIcon />}
+                      label="View"
+                      size="small"
+                      variant="outlined"
+                      onClick={() => setActiveTab(1)}
+                    />
+                  </TableCell>
+                  <TableCell>
                     {item.uploaded_to_faire ? (
                       <Chip 
                         icon={<CheckCircleIcon />}
@@ -691,6 +713,15 @@ const ZohoFaireIntegration = () => {
           onRowsPerPageChange={handleChangeRowsPerPage}
         />
       </TableContainer>
+      )}
+      
+      {/* Image Management Tab */}
+      {activeTab === 1 && (
+        <ImageManagement 
+          zohoItems={zohoItems} 
+          onAlert={addAlert}
+        />
+      )}
     </Box>
   );
 };
