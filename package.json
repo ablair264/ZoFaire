@@ -16,11 +16,20 @@
     "react-scripts": "5.0.1",
     "web-vitals": "^2.1.4"
   },
+  "devDependencies": {
+    "concurrently": "^7.6.0"
+  },
   "scripts": {
     "start": "react-scripts start",
-    "build": "react-scripts build",
+    "build": "react-scripts build && npm run copy-build",
+    "copy-build": "cp -r build/* backend/build/ || robocopy build backend\\build /E",
     "test": "react-scripts test",
-    "eject": "react-scripts eject"
+    "eject": "react-scripts eject",
+    "dev": "concurrently \"npm start\" \"npm run server\"",
+    "server": "cd backend && npm run dev",
+    "install-backend": "cd backend && npm install",
+    "build-production": "npm run build && cd backend && npm install --production",
+    "heroku-postbuild": "npm run build"
   },
   "eslintConfig": {
     "extends": [
