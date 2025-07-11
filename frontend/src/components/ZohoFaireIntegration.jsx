@@ -822,6 +822,14 @@ const ZohoFaireIntegration = () => {
     });
   }, [zohoItems, searchTerm, selectedManufacturer]);
 
+  const getManufacturerName = (item) => {
+    if (!item.manufacturer) return '';
+    if (typeof item.manufacturer === 'string') return item.manufacturer;
+    if (typeof item.manufacturer === 'object' && item.manufacturer.manufacturer_name)
+      return item.manufacturer.manufacturer_name;
+    return '';
+  };
+
 
   const handleCompleteSync = async () => {
     setLoading(true);
@@ -910,14 +918,6 @@ const ZohoFaireIntegration = () => {
     } finally {
       setLoading(false);
     }
-  };
-
-  const getManufacturerName = (item) => {
-    if (!item.manufacturer) return '';
-    if (typeof item.manufacturer === 'string') return item.manufacturer;
-    if (typeof item.manufacturer === 'object' && item.manufacturer.manufacturer_name)
-      return item.manufacturer.manufacturer_name;
-    return '';
   };
 
 
@@ -1313,20 +1313,8 @@ const ZohoFaireIntegration = () => {
                           </TableCell>
                           <TableCell>
                             <Chip
-                              label={typeof item.status === 'string' ? item.status : 'Unknown'}
-                              size="small"
-                              sx={{
-                                fontWeight: 600,
-                                backgroundColor: (item.status || '') === 'Active' 
-                                  ? alpha(theme.palette.success.main, 0.1)
-                                  : alpha(theme.palette.grey[500], 0.1),
-                                color: (item.status || '') === 'Active' 
-                                  ? theme.palette.success.dark
-                                  : theme.palette.grey[700],
-                                border: `1px solid ${(item.status || '') === 'Active' 
-                                  ? alpha(theme.palette.success.main, 0.3)
-                                  : alpha(theme.palette.grey[500], 0.3)}`,
-                              }}
+                              label={item.images_matched ? "Has images" : "No images"}
+                              color={item.images_matched ? "success" : "warning"}
                             />
                           </TableCell>
                           <TableCell align="center">

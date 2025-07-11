@@ -281,6 +281,7 @@ async function saveItemToFirestore(item, images) {
       })),
       imageCount: images.filter(img => !img.isVariant).length,
       hasImages: images.length > 0,
+      images_matched: images.length > 0, // <-- new field
       lastUpdated: admin.firestore.FieldValue.serverTimestamp(),
       normalizedManufacturer: normalizeBrandName(manufacturerName)
     };
