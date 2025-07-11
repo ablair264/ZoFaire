@@ -14,33 +14,24 @@ import {
   Chip,
   IconButton,
   TextField,
-  FormControl,
-  InputLabel,
-  Select,
-  MenuItem,
   LinearProgress,
   Alert,
   ImageList,
   ImageListItem,
   ImageListItemBar,
-  Tooltip,
   CircularProgress,
   Divider,
   List,
   ListItem,
   ListItemText,
-  ListItemIcon,
-  Fab,
-  Badge
+  ListItemIcon
 } from '@mui/material';
 import {
   Image as ImageIcon,
   CloudUpload as CloudUploadIcon,
   Refresh as RefreshIcon,
   Download as DownloadIcon,
-  PhotoCamera as PhotoCameraIcon,
   CheckCircle as CheckCircleIcon,
-  Error as ErrorIcon,
   Warning as WarningIcon,
   AddPhotoAlternate as AddPhotoIcon,
   CloudSync as CloudSyncIcon
@@ -72,7 +63,7 @@ const ImageManagement = ({ zohoItems, onAlert }) => {
   // Load Firebase brands on mount
   useEffect(() => {
     loadFirebaseBrands();
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Load Firebase brands
   const loadFirebaseBrands = async () => {
@@ -228,34 +219,34 @@ const ImageManagement = ({ zohoItems, onAlert }) => {
     }
   };
 
-  // Process images from Zoho URLs
-  const processZohoImages = async (products) => {
-    setLoading(true);
-    try {
-      const response = await fetch(`${API_BASE_URL}/images/process-and-upload`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          items: products,
-          options: processOptions
-        })
-      });
+  // Process images from Zoho URLs (keeping for future use)
+  // const processZohoImages = async (products) => {
+  //   setLoading(true);
+  //   try {
+  //     const response = await fetch(`${API_BASE_URL}/images/process-and-upload`, {
+  //       method: 'POST',
+  //       headers: { 'Content-Type': 'application/json' },
+  //       body: JSON.stringify({
+  //         items: products,
+  //         options: processOptions
+  //       })
+  //     });
 
-      if (response.ok) {
-        const data = await response.json();
-        if (data.success) {
-          onAlert('success', `Processed ${data.results.uploaded} images successfully`);
-          // Refresh image status
-          await matchAllImages();
-        }
-      }
-    } catch (error) {
-      console.error('Error processing Zoho images:', error);
-      onAlert('error', 'Failed to process images');
-    } finally {
-      setLoading(false);
-    }
-  };
+  //     if (response.ok) {
+  //       const data = await response.json();
+  //       if (data.success) {
+  //         onAlert('success', `Processed ${data.results.uploaded} images successfully`);
+  //         // Refresh image status
+  //         await matchAllImages();
+  //       }
+  //     }
+  //   } catch (error) {
+  //     console.error('Error processing Zoho images:', error);
+  //     onAlert('error', 'Failed to process images');
+  //   } finally {
+  //     setLoading(false);
+  //   }
+  // };
 
   // Complete sync workflow
   const runCompleteSync = async () => {
