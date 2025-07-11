@@ -756,6 +756,85 @@ app.post('/api/firebase/match-images', async (req, res) => {
     }
 });
 
+// NEW: Workflow match images endpoint (alias for frontend compatibility)
+app.post('/api/workflow/match-images', async (req, res) => {
+    try {
+        // Accept both 'items' and 'products' for compatibility
+        const items = req.body.items || req.body.products;
+        if (!Array.isArray(items) || items.length === 0) {
+            return res.status(400).json({ success: false, message: 'No items provided for image matching.' });
+        }
+        const result = await matchProductsWithImages(items);
+        res.json({ success: true, ...result });
+    } catch (error) {
+        console.error('Error in /api/workflow/match-images:', error);
+        res.status(500).json({ success: false, message: 'Failed to match images.', error: error.message });
+    }
+});
+
+// NEW: Get product images by SKU
+app.get('/api/firebase/product-images/:sku', async (req, res) => {
+    try {
+        const { sku } = req.params;
+        
+        if (!sku) {
+            return res.status(400).json({ success: false, message: 'SKU is required' });
+        }
+
+        // First, get the item from items_data to find the manufacturer
+        const { db } = initializeFirebase();
+        if (!db) {
+            return res.status(503).json({ success: false, message: 'Firestore not initialized' });
+        }
+
+        // Query items_data collection to find the item with this SKU
+        const itemsDataQuery = await db.collection('items_data')
+            .where('sku', '==', sku)
+            .limit(1)
+            .get();
+
+        if (itemsDataQuery.empty) {
+            return res.status(404).json({ success: false, message: 'Product not found' });
+        }
+
+        const itemData = itemsDataQuery.docs[0].data();
+        
+        // Handle manufacturer field that might be a map/object
+        let manufacturerName = itemData.manufacturer || itemData.brand || '';
+        
+        // If manufacturer is an object/map, extract manufacturer_name
+        if (manufacturerName && typeof manufacturerName === 'object' && manufacturerName.manufacturer_name) {
+            manufacturerName = manufacturerName.manufacturer_name;
+        }
+
+        if (!manufacturerName) {
+            return res.status(400).json({ success: false, message: 'Product has no manufacturer information' });
+        }
+
+        // Get images for this manufacturer and SKU
+        const images = await getProductImages(manufacturerName, sku);
+
+        res.json({
+            success: true,
+            images: images,
+            count: images.length,
+            product: {
+                sku: itemData.sku,
+                name: itemData.name,
+                manufacturer: manufacturerName
+            }
+        });
+
+    } catch (error) {
+        console.error(`Error fetching product images for SKU ${req.params.sku}:`, error);
+        res.status(500).json({ 
+            success: false, 
+            message: 'Failed to fetch product images', 
+            error: error.message 
+        });
+    }
+});
+
 // NEW: Batch Image Upload Endpoint
 app.post('/api/firebase/batch-upload-images', upload.array('images', 50), async (req, res) => {
     try {
