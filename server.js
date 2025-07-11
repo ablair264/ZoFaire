@@ -108,6 +108,9 @@ app.use(express.json());
 app.use('/uploads', express.static('uploads')); // Serve uploaded files
 app.use('/processed-images', express.static('processed-images')); // Serve processed images
 
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ limit: '50mb', extended: true }));
+
 // In-memory token storage (use Redis/database in production)
 let tokenStorage = {
     zoho_access_token: process.env.ZOHO_ACCESS_TOKEN || null,
