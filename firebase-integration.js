@@ -186,7 +186,7 @@ async function getAvailableBrands() {
       prefixes.prefixes.forEach(prefix => {
         const brand = prefix.replace('brand-images/', '').replace('/', '');
         if (brand) {
-          brands.add(brand);
+          brands.add(brand.toLowerCase());
         }
       });
     }

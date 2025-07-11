@@ -95,8 +95,8 @@ const ImageManagement = ({ zohoItems, onAlert, onRefreshItems }) => {
     if (zohoItems && zohoItems.length > 0) {
       const uniqueManufacturers = [...new Set(
         zohoItems
-          .map(item => item.manufacturer || item.brand || 'Unknown')
-          .filter(m => m && m !== 'Unknown')
+          .map(item => (item.manufacturer || item.brand || 'Unknown').toLowerCase())
+          .filter(m => m && m !== 'unknown')
       )].sort();
       setManufacturers(uniqueManufacturers);
     }
@@ -209,7 +209,7 @@ const ImageManagement = ({ zohoItems, onAlert, onRefreshItems }) => {
 
   // Get images for a specific product
   const getProductImages = async (product) => {
-    const manufacturer = product.manufacturer || product.brand || 'unknown';
+    const manufacturer = (product.manufacturer || product.brand || 'unknown').toLowerCase();
     const sku = product.sku;
 
     if (!sku) {

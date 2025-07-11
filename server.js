@@ -268,13 +268,26 @@ app.post('/api/workflow/complete-sync', async (req, res) => {
             throw new Error('Zoho access token not available for complete sync workflow.');
         }
 
-        // Fetch ALL Zoho items for the sync process (adjust per_page as needed)
-        // Note: For very large inventories, you might need to paginate here too.
-        const allZohoItemsResponse = await axios.get(`${ZOHO_BASE_URL}/items`, {
-            headers: { 'Authorization': `Zoho-oauthtoken ${accessToken}` },
-            params: { organization_id: ZOHO_ORGANIZATION_ID, per_page: 200 } // Fetch a larger batch
-        });
-        const allZohoItems = allZohoItemsResponse.data.items || [];
+        // Fetch ALL Zoho items for the sync process (with pagination)
+        let allZohoItems = [];
+        let page = 1;
+        const perPage = 200;
+        let totalPages = 1;
+        do {
+            const response = await axios.get(`${ZOHO_BASE_URL}/items`, {
+                headers: { 'Authorization': `Zoho-oauthtoken ${accessToken}` },
+                params: { organization_id: ZOHO_ORGANIZATION_ID, per_page: perPage, page }
+            });
+            const items = response.data.items || [];
+            allZohoItems = allZohoItems.concat(items);
+            if (response.data.page_context && response.data.page_context.has_more_page) {
+                page++;
+                totalPages++;
+                await new Promise(resolve => setTimeout(resolve, 300)); // 300ms delay to avoid rate limits
+            } else {
+                break;
+            }
+        } while (true);
         zohoItemsFetched = allZohoItems.length;
         console.log(`Fetched ${zohoItemsFetched} Zoho items for sync.`);
 
@@ -351,6 +364,32 @@ app.post('/api/workflow/complete-sync', async (req, res) => {
             message: 'Complete sync workflow failed.',
             error: error.message
         });
+    }
+});
+
+// Upload selected items to Faire
+app.post('/api/faire/upload', async (req, res) => {
+    try {
+        if (!FAIRE_ACCESS_TOKEN) {
+            return res.status(400).json({ success: false, message: 'FAIRE_ACCESS_TOKEN is not set in environment variables.' });
+        }
+        const items = req.body.items;
+        if (!Array.isArray(items) || items.length === 0) {
+            return res.status(400).json({ success: false, message: 'No items provided for upload.' });
+        }
+        // Simulate upload to Faire (replace with real API call as needed)
+        let uploaded = 0;
+        for (const item of items) {
+            // TODO: Replace this with actual Faire API call
+            // Example:
+            // await axios.post('https://api.faire.com/pe/v1/products', { ... }, { headers: { 'X-FAIRE-ACCESS-TOKEN': FAIRE_ACCESS_TOKEN } });
+            uploaded++;
+        }
+        console.log(`Uploaded ${uploaded} items to Faire (simulated).`);
+        res.json({ success: true, uploaded });
+    } catch (error) {
+        console.error('Error uploading to Faire:', error);
+        res.status(500).json({ success: false, message: 'Failed to upload to Faire', error: error.message });
     }
 });
 
@@ -460,6 +499,21 @@ app.post('/api/firebase/upload-processed-image', upload.array('images'), async (
     } catch (error) {
         console.error('Error in image upload/processing endpoint:', error);
         res.status(500).json({ success: false, message: 'Failed to process and upload images.', error: error.message });
+    }
+});
+
+// NEW: Batch match images for products (for ImageManagement component)
+app.post('/api/firebase/match-images', async (req, res) => {
+    try {
+        const items = req.body.items;
+        if (!Array.isArray(items) || items.length === 0) {
+            return res.status(400).json({ success: false, message: 'No items provided for image matching.' });
+        }
+        const result = await matchProductsWithImages(items);
+        res.json({ success: true, ...result });
+    } catch (error) {
+        console.error('Error in /api/firebase/match-images:', error);
+        res.status(500).json({ success: false, message: 'Failed to match images.', error: error.message });
     }
 });
 
