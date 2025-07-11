@@ -757,8 +757,8 @@ const ZohoFaireIntegration = () => {
     // Note: Filtering by searchTerm is done on current page data.
     // Full filtering should ideally happen via backend search_text param.
     return zohoItems.filter(item =>
-      item.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      item.sku.toLowerCase().includes(searchTerm.toLowerCase())
+      (item.name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (item.sku || '').toLowerCase().includes(searchTerm.toLowerCase())
     );
   }, [zohoItems, searchTerm]);
 
@@ -1221,7 +1221,7 @@ const ZohoFaireIntegration = () => {
                               <BrandAvatar brand={item.brand || item.manufacturer} size={32} />
                               <Box>
                                 <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                                  {item.name}
+                                  {item.name || 'No Name'}
                                 </Typography>
                                 <Tooltip title="View details">
                                   <VisibilityIcon fontSize="small" color="action" />
@@ -1234,22 +1234,22 @@ const ZohoFaireIntegration = () => {
                           </TableCell>
                           <TableCell>
                             <Typography variant="body2" sx={{ fontFamily: 'monospace' }}>
-                              {item.sku}
+                              {item.sku || 'No SKU'}
                             </Typography>
                           </TableCell>
                           <TableCell>
                             <Chip
-                              label={item.status}
+                              label={item.status || 'Unknown'}
                               size="small"
                               sx={{
                                 fontWeight: 600,
-                                backgroundColor: item.status === 'Active' 
+                                backgroundColor: (item.status || '') === 'Active' 
                                   ? alpha(theme.palette.success.main, 0.1)
                                   : alpha(theme.palette.grey[500], 0.1),
-                                color: item.status === 'Active' 
+                                color: (item.status || '') === 'Active' 
                                   ? theme.palette.success.dark
                                   : theme.palette.grey[700],
-                                border: `1px solid ${item.status === 'Active' 
+                                border: `1px solid ${(item.status || '') === 'Active' 
                                   ? alpha(theme.palette.success.main, 0.3)
                                   : alpha(theme.palette.grey[500], 0.3)}`,
                               }}
@@ -1261,21 +1261,21 @@ const ZohoFaireIntegration = () => {
                                 variant="body2" 
                                 sx={{ 
                                   fontWeight: 600,
-                                  color: item.stock_on_hand <= 10 
+                                  color: (item.stock_on_hand || 0) <= 10 
                                     ? theme.palette.error.main 
                                     : theme.palette.text.primary
                                 }}
                               >
-                                {item.stock_on_hand}
+                                {item.stock_on_hand || 0}
                               </Typography>
-                              {item.stock_on_hand <= 10 && (
+                              {(item.stock_on_hand || 0) <= 10 && (
                                 <WarningIcon sx={{ fontSize: 16, color: theme.palette.error.main }} />
                               )}
                             </Box>
                           </TableCell>
                           <TableCell align="right">
                             <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                              ${parseFloat(item.rate).toFixed(2)}
+                              ${parseFloat(item.rate || 0).toFixed(2)}
                             </Typography>
                           </TableCell>
                           <TableCell align="center">
