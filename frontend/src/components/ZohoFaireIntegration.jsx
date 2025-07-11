@@ -821,7 +821,7 @@ const ZohoFaireIntegration = () => {
       const itemSku = String(item.sku || '');
       const manufacturerName = getManufacturerName(item);
       const searchLower = String(searchTerm || '').toLowerCase();
-      const manufacturerFilter = selectedManufacturer ? manufacturerName.toLowerCase().includes(selectedManufacturer.toLowerCase()) : true;
+      const manufacturerFilter = !selectedManufacturer || manufacturerName.toLowerCase().includes(selectedManufacturer.toLowerCase());
       return (
         (itemName.toLowerCase().includes(searchLower) ||
         itemSku.toLowerCase().includes(searchLower)) &&
@@ -1341,26 +1341,15 @@ const ZohoFaireIntegration = () => {
                           </TableCell>
                           <TableCell align="center">
                             <Box sx={{ display: 'flex', gap: 1, justifyContent: 'center' }}>
-                              {(() => {
-                                const imageStatus = getImageStatus(item);
-                                return imageStatus.status === 'matched' ? (
-                                  <Chip
-                                    size="small"
-                                    icon={<CheckCircleIcon />}
-                                    label={`${imageStatus.count} imgs`}
-                                    color="success"
-                                    variant="outlined"
-                                  />
-                                ) : (
-                                  <Chip
-                                    size="small"
-                                    icon={<WarningIcon />}
-                                    label="No images"
-                                    color="warning"
-                                    variant="outlined"
-                                  />
-                                );
-                              })()}
+                              {item.images_matched ? (
+                                <img
+                                  src={item.images && item.images.length > 0 ? item.images[0].url : ''}
+                                  alt="thumbnail"
+                                  style={{ width: 32, height: 32, objectFit: 'cover', borderRadius: '50%' }}
+                                />
+                              ) : (
+                                <NoImageIcon />
+                              )}
                               <Tooltip title="Manage product images">
                                 <IconButton
                                   size="small"

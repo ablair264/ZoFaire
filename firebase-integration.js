@@ -254,21 +254,11 @@ async function saveItemToFirestore(item, images) {
       .limit(1)
       .get();
     
-    if (itemsDataQuery.empty) {
-      console.warn(`⚠️  No items_data document found for SKU ${item.sku}, skipping save`);
-      return;
-    }
-    
-    const docRef = itemsDataQuery.docs[0].ref;
-    
     // Handle manufacturer field that might be a map/object
     let manufacturerName = item.manufacturer || item.brand;
-    
-    // If manufacturer is an object/map, extract manufacturer_name
     if (manufacturerName && typeof manufacturerName === 'object' && manufacturerName.manufacturer_name) {
       manufacturerName = manufacturerName.manufacturer_name;
     }
-    
     const data = {
       ...item,
       images: images.map(img => ({
@@ -281,13 +271,17 @@ async function saveItemToFirestore(item, images) {
       })),
       imageCount: images.filter(img => !img.isVariant).length,
       hasImages: images.length > 0,
-      images_matched: images.length > 0, // <-- new field
+      images_matched: images.length > 0,
       lastUpdated: admin.firestore.FieldValue.serverTimestamp(),
       normalizedManufacturer: normalizeBrandName(manufacturerName)
     };
-    
-    await docRef.set(data, { merge: true });
-    console.log(`✅ Saved item ${item.sku} to items_data with ${images.length} images`);
+    if (!itemsDataQuery.empty) {
+      const docRef = itemsDataQuery.docs[0].ref;
+      await docRef.set(data, { merge: true });
+      console.log(`✅ Updated item ${item.sku} in items_data with ${images.length} images`);
+    } else {
+      console.warn(`⚠️ Tried to update item ${item.sku} in items_data, but it was not found.`);
+    }
     
   } catch (error) {
     console.error(`❌ Error saving item to Firestore:`, error.message);
