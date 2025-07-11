@@ -33,7 +33,8 @@ import {
   useTheme,
   alpha,
   Avatar,
-  Fade
+  Fade,
+  FormControlLabel // <--- ADDED THIS IMPORT
 } from '@mui/material';
 import {
   Refresh as RefreshIcon,
@@ -44,7 +45,8 @@ import {
   CheckCircle as CheckCircleIcon,
   Image as ImageIcon,
   FilterList as FilterListIcon,
-  TrendingUp as TrendingUpIcon
+  TrendingUp as TrendingUpIcon,
+  Warning as WarningIcon // <--- ADDED THIS IMPORT
 } from '@mui/icons-material';
 import ImageManagement from './ImageManagement';
 import ProgressLoader from './ProgressLoader';
@@ -391,7 +393,7 @@ const ZohoFaireIntegration = () => {
                 onChange={handleSearchChange}
                 sx={{ mr: 2, flexShrink: 0 }}
               />
-              <FormControlLabel
+              <FormControlLabel // <--- COMPONENT NOW DEFINED
                 control={
                   <Checkbox
                     checked={!filterInactive} // Checkbox is for 'Active Items Only'
