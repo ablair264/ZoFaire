@@ -30,7 +30,7 @@ const ZOHO_CLIENT_ID = process.env.ZOHO_CLIENT_ID;
 const ZOHO_CLIENT_SECRET = process.env.ZOHO_CLIENT_SECRET;
 const ZOHO_ORGANIZATION_ID = process.env.ZOHO_ORGANIZATION_ID;
 const ZOHO_REDIRECT_URI = process.env.REACT_APP_ZOHO_REDIRECT_URI || 'https://zofaire.onrender.com/oauth/callback';
-const ZOHO_BASE_URL = process.env.REACT_APP_ZOHO_BASE_URL || 'https://inventory.zoho.eu/api/v1';
+const ZOHO_BASE_URL = process.env.ZOHO_BASE_URL || 'https://www.zohoapis.eu/inventory/v1';
 const FAIRE_ACCESS_TOKEN = process.env.FAIRE_ACCESS_TOKEN;
 
 // Configure multer for file uploads
@@ -211,12 +211,17 @@ app.get('/api/zoho/items', async (req, res) => {
 
         const { page, per_page, sort_column, sort_order, search_text, filterInactive } = req.query;
 
+        // Map sort_order from frontend to Zoho API ('A' or 'D')
+        let zohoSortOrder = 'A'; // default
+        if (sort_order === 'desc') zohoSortOrder = 'D';
+        else if (sort_order === 'asc') zohoSortOrder = 'A';
+
         const params = {
             organization_id: ZOHO_ORGANIZATION_ID,
             page: page || 1,
             per_page: per_page || 20,
             sort_column: sort_column || 'name',
-            sort_order: sort_order || 'asc'
+            sort_order: zohoSortOrder
         };
 
         if (search_text) {
