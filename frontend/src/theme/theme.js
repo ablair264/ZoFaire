@@ -25,8 +25,14 @@ const customColors = {
   }
 };
 
+// Extend theme with gradients
+const baseThemeOptions = {
+  gradients: customColors.gradients,
+};
+
 // Light theme configuration
 export const lightTheme = createTheme({
+  ...baseThemeOptions,
   palette: {
     mode: 'light',
     primary: {
@@ -71,7 +77,6 @@ export const lightTheme = createTheme({
       secondary: '#64748b',
     },
   },
-  gradients: customColors.gradients,
   typography: {
     fontFamily: [
       '-apple-system',
@@ -238,6 +243,7 @@ export const lightTheme = createTheme({
 
 // Dark theme configuration
 export const darkTheme = createTheme({
+  ...baseThemeOptions,
   palette: {
     mode: 'dark',
     primary: {
@@ -282,7 +288,6 @@ export const darkTheme = createTheme({
       secondary: '#cbd5e1',
     },
   },
-  gradients: customColors.gradients,
   typography: lightTheme.typography,
   shape: lightTheme.shape,
   shadows: lightTheme.shadows.map((shadow) => 

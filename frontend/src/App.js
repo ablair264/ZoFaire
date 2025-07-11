@@ -8,6 +8,7 @@ import {
   Typography,
   IconButton,
   useMediaQuery,
+  Tooltip,
 } from '@mui/material';
 import {
   Brightness4 as DarkModeIcon,
@@ -15,6 +16,8 @@ import {
 } from '@mui/icons-material';
 import ZohoFaireIntegration from './components/ZohoFaireIntegration';
 import { lightTheme, darkTheme, getLogoPath } from './theme/theme';
+// Uncomment the following line to test if Lottie is working:
+// import LottieTest from './components/LottieTest';
 
 function App() {
   const prefersDarkMode = useMediaQuery('(prefers-color-scheme: dark)');
@@ -68,9 +71,28 @@ function App() {
               ZoFaire Integration
             </Typography>
           </Box>
-          <IconButton onClick={handleThemeToggle} color="inherit">
-            {darkMode ? <LightModeIcon /> : <DarkModeIcon />}
-          </IconButton>
+          <Tooltip title={darkMode ? "Switch to light mode" : "Switch to dark mode"}>
+            <IconButton 
+              onClick={handleThemeToggle} 
+              sx={{
+                ml: 1,
+                backgroundColor: theme.palette.mode === 'dark' 
+                  ? 'rgba(255, 255, 255, 0.1)' 
+                  : 'rgba(0, 0, 0, 0.1)',
+                '&:hover': {
+                  backgroundColor: theme.palette.mode === 'dark' 
+                    ? 'rgba(255, 255, 255, 0.2)' 
+                    : 'rgba(0, 0, 0, 0.2)',
+                }
+              }}
+            >
+              {darkMode ? (
+                <LightModeIcon sx={{ color: '#fbbf24' }} />
+              ) : (
+                <DarkModeIcon sx={{ color: '#6366f1' }} />
+              )}
+            </IconButton>
+          </Tooltip>
         </Toolbar>
       </AppBar>
 
@@ -81,6 +103,8 @@ function App() {
           backgroundColor: theme.palette.background.default,
         }}
       >
+        {/* Uncomment the line below to test if Lottie animations are working: */}
+        {/* <LottieTest /> */}
         <ZohoFaireIntegration />
       </Box>
     </ThemeProvider>

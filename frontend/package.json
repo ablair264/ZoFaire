@@ -11,6 +11,7 @@
     "@testing-library/jest-dom": "^6.6.3",
     "@testing-library/react": "^16.3.0",
     "@testing-library/user-event": "^13.5.0",
+    "lottie-react": "^2.4.0",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
     "react-scripts": "5.0.1",
@@ -20,7 +21,9 @@
     "start": "react-scripts start",
     "build": "react-scripts build",
     "test": "react-scripts test",
-    "eject": "react-scripts eject"
+    "eject": "react-scripts eject",
+    "clean-install": "rm -rf node_modules package-lock.json && npm install",
+    "setup": "npm install && echo 'Please copy splitfin.png and splitfin-white.png to the public directory'"
   },
   "eslintConfig": {
     "extends": [
