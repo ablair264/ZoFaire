@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   Box,
   Card,
@@ -30,8 +30,7 @@ import {
   Inventory as InventoryIcon,
   CloudUpload as CloudUploadIcon,
   Schedule as ScheduleIcon,
-  CheckCircle as CheckCircleIcon,
-  Error as ErrorIcon
+  CheckCircle as CheckCircleIcon
 } from '@mui/icons-material';
 
 const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'https://zofaire.onrender.com/api';
@@ -52,7 +51,6 @@ const ZohoFaireIntegration = () => {
     lastUpdate: null
   });
   const [alerts, setAlerts] = useState([]);
-  const [uploadedItems, setUploadedItems] = useState(new Set());
   const [authStatus, setAuthStatus] = useState(null);
 
   // Check authentication status
@@ -69,7 +67,7 @@ const ZohoFaireIntegration = () => {
   };
 
   // Fetch data from Zoho Inventory API
-  const fetchZohoItems = async () => {
+  const fetchZohoItems = useCallback(async () => {
     setLoading(true);
     try {
       const response = await fetch(`${API_BASE_URL}/zoho/items`);
@@ -120,7 +118,7 @@ const ZohoFaireIntegration = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   // Check which items are already uploaded to Faire
   const checkFaireStatus = async () => {
@@ -131,7 +129,6 @@ const ZohoFaireIntegration = () => {
         const data = await response.json();
         if (data.success) {
           const faireSKUs = new Set(data.products.map(p => p.sku));
-          setUploadedItems(faireSKUs);
           
           // Update zoho items with Faire status
           setZohoItems(prev => prev.map(item => ({
@@ -321,7 +318,7 @@ const ZohoFaireIntegration = () => {
         addAlert('warning', 'Authentication required. Please authenticate with Zoho.');
       }
     });
-  }, []);
+  }, [fetchZohoItems]);
 
   // Check Faire status after fetching Zoho items
   useEffect(() => {
