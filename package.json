@@ -8,6 +8,7 @@
     "dev": "nodemon server.js",
     "test": "echo \"Error: no test specified\" && exit 1",
     "test:eu": "node test-eu-config.js",
+    "test:firebase": "node test-firebase.js",
     "build": "cd frontend && npm install && npm run build && cp -r build ../build",
     "dev-backend": "nodemon server.js",
     "dev-frontend": "cd frontend && npm start"
@@ -30,7 +31,9 @@
     "cors": "^2.8.5",
     "axios": "^1.6.0",
     "dotenv": "^16.3.1",
-    "multer": "^1.4.5-lts.1"
+    "multer": "^1.4.5-lts.1",
+    "firebase-admin": "^12.0.0",
+    "sharp": "^0.33.0"
   },
   "devDependencies": {
     "nodemon": "^3.0.1"

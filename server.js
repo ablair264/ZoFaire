@@ -597,31 +597,162 @@ app.post('/auth/zoho/revoke', async (req, res) => {
 
 // Zoho Inventory Routes
 
+// Helper function to fetch all pages of items
+const fetchAllZohoItems = async (zohoHeaders, options = {}) => {
+    const allItems = [];
+    let page = 1;
+    let hasMore = true;
+    const perPage = 200; // Max allowed by Zoho
+    const maxPages = options.maxPages || 50; // Safety limit
+    const delayMs = options.delayMs || 200; // Delay between requests
+    
+    console.log('🔄 Starting to fetch all Zoho items...');
+    
+    while (hasMore && page <= maxPages) {
+        try {
+            const response = await axios.get(
+                `${ZOHO_BASE_URL}/items`,
+                {
+                    headers: zohoHeaders,
+                    params: {
+                        page: page,
+                        per_page: perPage
+                    }
+                }
+            );
+            
+            if (response.data.code === 0) {
+                const items = response.data.items || [];
+                allItems.push(...items);
+                
+                const pageContext = response.data.page_context || {};
+                hasMore = pageContext.has_more_page || false;
+                
+                console.log(`   - Page ${page}: ${items.length} items (Total: ${allItems.length})`);
+                
+                if (hasMore) {
+                    page++;
+                    // Add delay to avoid rate limiting
+                    await new Promise(resolve => setTimeout(resolve, delayMs));
+                } else {
+                    console.log(`✅ Completed: ${allItems.length} total items fetched`);
+                }
+            } else {
+                console.error(`❌ Error on page ${page}:`, response.data.message);
+                hasMore = false;
+            }
+        } catch (error) {
+            console.error(`❌ Failed to fetch page ${page}:`, error.message);
+            // If we've already fetched some items, return what we have
+            if (allItems.length > 0) {
+                console.log(`⚠️  Partial success: Returning ${allItems.length} items`);
+                break;
+            }
+            throw error;
+        }
+    }
+    
+    if (page > maxPages) {
+        console.log(`⚠️  Reached max pages limit (${maxPages}). There may be more items.`);
+    }
+    
+    return allItems;
+};
+
 // Get all items from Zoho Inventory
 app.get('/api/zoho/items', async (req, res) => {
     try {
+        // Check if user wants paginated results or all items
+        const fetchAll = req.query.fetchAll === 'true';
         const page = req.query.page || 1;
         const per_page = req.query.per_page || 200;
         
         const zohoHeaders = await getZohoHeaders();
         
+        if (fetchAll) {
+            // Fetch all items with pagination
+            console.log('📥 Request to fetch ALL items from Zoho');
+            const allItems = await fetchAllZohoItems(zohoHeaders, {
+                maxPages: parseInt(req.query.maxPages) || 50,
+                delayMs: parseInt(req.query.delayMs) || 200
+            });
+            
+            res.json({
+                success: true,
+                items: allItems,
+                total: allItems.length,
+                fetchedAll: true,
+                page_context: {
+                    page: 1,
+                    per_page: allItems.length,
+                    total: allItems.length,
+                    has_more_page: false
+                }
+            });
+        } else {
+            // Single page request (existing behavior)
+            const response = await axios.get(
+                `${ZOHO_BASE_URL}/items`,
+                {
+                    headers: zohoHeaders,
+                    params: {
+                        page: page,
+                        per_page: per_page
+                    }
+                }
+            );
+
+            if (response.data.code === 0) {
+                res.json({
+                    success: true,
+                    items: response.data.items,
+                    page_context: response.data.page_context
+                });
+            } else {
+                res.status(400).json({
+                    success: false,
+                    message: response.data.message
+                });
+            }
+        }
+
+    } catch (error) {
+        if (error.message.includes('No Zoho access token')) {
+            return res.status(401).json({
+                success: false,
+                message: 'Please authenticate with Zoho first',
+                auth_url: '/auth/zoho'
+            });
+        }
+        
+        const errorResponse = handleApiError(error, 'Zoho');
+        res.status(errorResponse.status).json(errorResponse);
+    }
+});
+
+// Get count of total items in Zoho Inventory
+app.get('/api/zoho/items/count', async (req, res) => {
+    try {
+        const zohoHeaders = await getZohoHeaders();
+        
+        // Fetch just one item to get the page context with total count
         const response = await axios.get(
             `${ZOHO_BASE_URL}/items`,
             {
                 headers: zohoHeaders,
                 params: {
-                    page: page,
-                    per_page: per_page
-                    // organization_id is now in headers, not params
+                    page: 1,
+                    per_page: 1
                 }
             }
         );
 
         if (response.data.code === 0) {
+            const pageContext = response.data.page_context || {};
             res.json({
                 success: true,
-                items: response.data.items,
-                page_context: response.data.page_context
+                total: pageContext.total || 0,
+                has_more_page: pageContext.has_more_page || false
             });
         } else {
             res.status(400).json({

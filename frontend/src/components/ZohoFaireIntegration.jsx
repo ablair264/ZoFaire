@@ -47,6 +47,7 @@ const ZohoFaireIntegration = () => {
   const [rowsPerPage, setRowsPerPage] = useState(10);
   const [metrics, setMetrics] = useState({
     zohoItems: 0,
+    zohoItemsTotal: null, // Total items available in Zoho
     faireUploaded: 0,
     lastUpdate: null
   });
@@ -73,10 +74,17 @@ const ZohoFaireIntegration = () => {
   }, []);
 
   // Fetch data from Zoho Inventory API
-  const fetchZohoItems = useCallback(async () => {
+  const fetchZohoItems = useCallback(async (fetchAll = false) => {
     setLoading(true);
     try {
-      const response = await fetch(`${API_BASE_URL}/zoho/items`);
+      // Build URL with fetchAll parameter if needed
+      let url = `${API_BASE_URL}/zoho/items`;
+      if (fetchAll) {
+        url += '?fetchAll=true';
+        addAlert('info', 'Fetching all items from Zoho. This may take a few moments...');
+      }
+      
+      const response = await fetch(url);
       
       if (response.status === 401) {
         // Authentication required
@@ -112,8 +120,20 @@ const ZohoFaireIntegration = () => {
         }));
         
         setZohoItems(items);
-        updateMetrics(items);
-        addAlert('success', `Successfully fetched ${items.length} items from Zoho Inventory`);
+        
+        // Update metrics with total count if available
+        const pageContext = data.page_context || {};
+        updateMetrics(items, pageContext.total);
+        
+        if (data.fetchedAll) {
+          addAlert('success', `Successfully fetched ALL ${items.length} items from Zoho Inventory`);
+        } else {
+          if (pageContext.has_more_page) {
+            addAlert('info', `Fetched ${items.length} items. Total available: ${pageContext.total || 'Unknown'}`);
+          } else {
+            addAlert('success', `Successfully fetched ${items.length} items from Zoho Inventory`);
+          }
+        }
       } else {
         throw new Error(data.message || 'Failed to fetch items');
       }
@@ -267,9 +287,10 @@ const ZohoFaireIntegration = () => {
   };
 
   // Update metrics
-  const updateMetrics = (items) => {
+  const updateMetrics = (items, totalCount = null) => {
     setMetrics({
       zohoItems: items.length,
+      zohoItemsTotal: totalCount,
       faireUploaded: items.filter(item => item.uploaded_to_faire).length,
       lastUpdate: new Date().toLocaleString()
     });
@@ -320,7 +341,7 @@ const ZohoFaireIntegration = () => {
     const initializeApp = async () => {
       const isAuthenticated = await checkAuthStatus();
       if (isAuthenticated) {
-        fetchZohoItems();
+        fetchZohoItems(false); // Load first page initially
       }
     };
     
@@ -447,6 +468,11 @@ const ZohoFaireIntegration = () => {
                   </Typography>
                   <Typography variant="h5">
                     {metrics.zohoItems}
+                    {metrics.zohoItemsTotal && metrics.zohoItemsTotal > metrics.zohoItems && (
+                      <Typography variant="caption" color="text.secondary" display="block">
+                        of {metrics.zohoItemsTotal} total
+                      </Typography>
+                    )}
                   </Typography>
                 </Box>
               </Box>
@@ -504,12 +530,12 @@ const ZohoFaireIntegration = () => {
               sx={{ mr: 2 }}
             />
             
-            <Tooltip title="Refresh from Zoho">
+            <Tooltip title="Refresh from Zoho (First 200)">
               <IconButton 
                 onClick={async () => {
                   const isAuthenticated = await checkAuthStatus();
                   if (isAuthenticated) {
-                    fetchZohoItems();
+                    fetchZohoItems(false);
                   } else {
                     addAlert('warning', 'Please authenticate with Zoho first');
                   }
@@ -520,6 +546,23 @@ const ZohoFaireIntegration = () => {
                 <RefreshIcon />
               </IconButton>
             </Tooltip>
+            
+            <Button
+              variant="outlined"
+              startIcon={loading ? <CircularProgress size={20} /> : <InventoryIcon />}
+              onClick={async () => {
+                const isAuthenticated = await checkAuthStatus();
+                if (isAuthenticated) {
+                  fetchZohoItems(true);
+                } else {
+                  addAlert('warning', 'Please authenticate with Zoho first');
+                }
+              }}
+              disabled={loading}
+              sx={{ ml: 1 }}
+            >
+              {loading ? 'Loading...' : 'Load All Items'}
+            </Button>
             
             <Button
               variant="contained"
