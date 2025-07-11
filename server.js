@@ -459,9 +459,9 @@ app.post('/api/firebase/upload-processed-image', upload.array('images'), async (
 });
 
 
-// Fallback for any other request (serve React App) - keep this at the very end
-app.get('*', (req, res) => {
-    res.sendFile(path.join(__dirname, 'build', 'index.html'));
+// Fallback for any other request (API only backend)
+app.use((req, res) => {
+    res.status(404).json({ error: 'Not found' });
 });
 
 // Start the server
