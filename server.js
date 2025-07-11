@@ -8,9 +8,15 @@ const app = express();
 const PORT = process.env.PORT || 3001;
 
 // Middleware
-app.use(cors());
+app.use(cors({
+    origin: [
+        'http://localhost:3000',
+        'https://zofaire-frontend.netlify.app',
+        'https://your-frontend-domain.netlify.app' // Update this with your actual Netlify domain
+    ],
+    credentials: true
+}));
 app.use(express.json());
-app.use(express.static(path.join(__dirname, 'build'))); // Serve React build
 
 // In-memory token storage (use Redis/database in production)
 let tokenStorage = {
@@ -550,9 +556,37 @@ function mapZohoToFaireCategory(zohoCategory) {
     return categoryMap[zohoCategory] || 'other';
 }
 
-// Serve the React app for all other routes
-app.get('*', (req, res) => {
-    res.sendFile(path.join(__dirname, 'build/index.html'));
+// API-only server - frontend served by Netlify
+// Root endpoint for API documentation
+app.get('/', (req, res) => {
+    res.json({
+        name: 'Zoho to Faire Integration API',
+        version: '1.0.0',
+        status: 'running',
+        endpoints: {
+            health: '/health',
+            auth: {
+                start: '/auth/zoho',
+                callback: '/auth/zoho/callback',
+                status: '/auth/status',
+                revoke: '/auth/zoho/revoke'
+            },
+            zoho: {
+                items: '/api/zoho/items',
+                item: '/api/zoho/items/:id'
+            },
+            faire: {
+                products: '/api/faire/products',
+                create: 'POST /api/faire/products',
+                update: 'PUT /api/faire/products/:id'
+            },
+            bulk: {
+                upload: 'POST /api/bulk/upload'
+            }
+        },
+        frontend: 'https://zofaire-frontend.netlify.app',
+        docs: 'https://github.com/ablair264/ZoFaire'
+    });
 });
 
 // Error handling middleware

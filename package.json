@@ -1,18 +1,11 @@
 {
-  "name": "zoho-faire-integration",
+  "name": "zoho-faire-backend",
   "version": "1.0.0",
-  "description": "Zoho to Faire integration with React frontend and Express backend",
+  "description": "Backend API server for Zoho to Faire integration",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "build": "npm install && npm run build-frontend && npm run setup-backend",
-    "build-frontend": "npm run install-frontend && npm run build-react",
-    "install-frontend": "npm install --prefix ./frontend",
-    "build-react": "cd frontend && npm run build",
-    "setup-backend": "mkdir -p build && cp -r frontend/build/* build/",
-    "dev": "concurrently \"npm run dev-frontend\" \"npm run dev-backend\"",
-    "dev-frontend": "cd frontend && npm start",
-    "dev-backend": "nodemon server.js",
+    "dev": "nodemon server.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [
@@ -20,7 +13,8 @@
     "faire",
     "inventory",
     "marketplace",
-    "integration"
+    "integration",
+    "api"
   ],
   "author": "Your Name",
   "license": "MIT",
@@ -34,7 +28,6 @@
     "dotenv": "^16.3.1"
   },
   "devDependencies": {
-    "concurrently": "^7.6.0",
     "nodemon": "^3.0.1"
   }
 }
