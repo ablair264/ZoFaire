@@ -14,10 +14,13 @@ const {
     // downloadImage, // Uncomment if used directly in server.js
     getAvailableBrands,
     matchProductsWithImages,
-    uploadProcessedImage,
-    getZohoAccessToken, // Function to get current access token
-    refreshZohoTokens // Function to refresh token
+    uploadProcessedImage
+    // getZohoAccessToken, // Function to get current access token (REMOVE from here)
+    // refreshZohoTokens // Function to refresh token (REMOVE from here)
 } = require('./firebase-integration'); // Adjust path as needed for your project structure
+
+// Import Zoho token management from zoho-auth.js
+const { getZohoAccessToken, refreshZohoTokens } = require('./zoho-auth');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
