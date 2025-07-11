@@ -902,145 +902,76 @@ const ZohoFaireIntegration = () => {
             color: theme.palette.text.primary,
             mb: 3,
             pb: 1,
-            borderBottom: `2px solid ${theme.palette.primary.main}`
+            borderBottom: `2px solid ${theme.palette.primary.main}`,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between'
           }}
         >
           Zoho-Faire Integration Dashboard
-        </Typography>
-
-        {/* Status Badges Section - Animated Circular Badges */}
-        <Grid container spacing={4} alignItems="center" sx={{ mb: 4, justifyContent: 'center' }}>
-          {/* Zoho Status Badge */}
-          <Grid item>
-            <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-              <Tooltip 
-                title={
-                  // authStatus 
-                  //   ? 'Connected to Zoho Inventory' 
-                  //   : 'Not connected. Click to authenticate with Zoho.'
-                  'Zoho Authentication'
-                } 
-                placement="top"
-                arrow
-              >
-                <StatusBadge
-                  theme={theme}
-                  // connected={authStatus}
-                  onClick={handleAuthZoho}
-                >
-                  <Avatar 
-                    src="/logos/zoho-inventory.png" 
-                    alt="Zoho Inventory" 
-                    className="status-icon"
-                    sx={{ 
-                      bgcolor: 'white',
-                      p: 1,
-                      boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
-                    }} 
-                  />
-                </StatusBadge>
-              </Tooltip>
-              <Typography 
-                variant="body2" 
-                sx={{ 
-                  mt: 1.5, 
-                  fontWeight: 600,
-                  color: // authStatus ? theme.palette.success.main : theme.palette.error.main
-                  'info' // Placeholder for Zoho status
-                }}
-              >
-                Zoho
-              </Typography>
-            </Box>
-          </Grid>
           
-          {/* Faire Status Badge */}
-          <Grid item>
-            <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-              <Tooltip 
-                title={
-                  faireStatus 
-                    ? 'Faire API Key is configured' 
-                    : 'No Faire API key found. Click to set up API access.'
-                } 
-                placement="top"
-                arrow
+          {/* Status Badges in Header */}
+          <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
+            {/* Faire Status Badge */}
+            <Tooltip 
+              title={
+                faireStatus 
+                  ? 'Faire API Key is configured' 
+                  : 'No Faire API key found. Click to set up API access.'
+              } 
+              placement="top"
+              arrow
+            >
+              <StatusBadge
+                theme={theme}
+                connected={faireStatus}
+                onClick={!faireStatus ? () => {
+                  window.open('https://www.faire.com/account/api', '_blank');
+                  showSnackbar('Please add your Faire API key to the backend configuration.', 'info');
+                } : undefined}
               >
-                <StatusBadge
-                  theme={theme}
-                  connected={faireStatus}
-                  onClick={!faireStatus ? () => {
-                    window.open('https://www.faire.com/account/api', '_blank');
-                    showSnackbar('Please add your Faire API key to the backend configuration.', 'info');
-                  } : undefined}
-                >
-                  <Avatar 
-                    src="/logos/faire.png" 
-                    alt="Faire" 
-                    className="status-icon"
-                    sx={{ 
-                      bgcolor: 'white',
-                      p: 1,
-                      boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
-                    }} 
-                  />
-                </StatusBadge>
-              </Tooltip>
-              <Typography 
-                variant="body2" 
-                sx={{ 
-                  mt: 1.5, 
-                  fontWeight: 600,
-                  color: faireStatus ? theme.palette.success.main : theme.palette.error.main
-                }}
-              >
-                Faire
-              </Typography>
-            </Box>
-          </Grid>
+                <Avatar 
+                  src="/logos/faire.png" 
+                  alt="Faire" 
+                  className="status-icon"
+                  sx={{ 
+                    bgcolor: 'white',
+                    p: 1,
+                    boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
+                  }} 
+                />
+              </StatusBadge>
+            </Tooltip>
 
-          {/* Firebase Status Badge */}
-          <Grid item>
-            <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-              <Tooltip 
-                title={
-                  firebaseBrands.length > 0
-                    ? `Connected to Firebase (${firebaseBrands.length} brands available)` 
-                    : 'Firebase not configured. Click to check connection.'
-                } 
-                placement="top"
-                arrow
+            {/* Firebase Status Badge */}
+            <Tooltip 
+              title={
+                firebaseBrands.length > 0
+                  ? `Connected to Firebase (${firebaseBrands.length} brands available)` 
+                  : 'Firebase not configured. Click to check connection.'
+              } 
+              placement="top"
+              arrow
+            >
+              <StatusBadge
+                theme={theme}
+                connected={firebaseBrands.length > 0}
+                onClick={firebaseBrands.length === 0 ? checkFirebaseAndLoad : undefined}
               >
-                <StatusBadge
-                  theme={theme}
-                  connected={firebaseBrands.length > 0}
-                  onClick={firebaseBrands.length === 0 ? checkFirebaseAndLoad : undefined}
-                >
-                  <Avatar 
-                    src="/logos/firebase.png" 
-                    alt="Firebase" 
-                    className="status-icon"
-                    sx={{ 
-                      bgcolor: 'white',
-                      p: 1,
-                      boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
-                    }} 
-                  />
-                </StatusBadge>
-              </Tooltip>
-              <Typography 
-                variant="body2" 
-                sx={{ 
-                  mt: 1.5, 
-                  fontWeight: 600,
-                  color: firebaseBrands.length > 0 ? theme.palette.success.main : theme.palette.error.main
-                }}
-              >
-                Firebase
-              </Typography>
-            </Box>
-          </Grid>
-        </Grid>
+                <Avatar 
+                  src="/logos/firebase.png" 
+                  alt="Firebase" 
+                  className="status-icon"
+                  sx={{ 
+                    bgcolor: 'white',
+                    p: 1,
+                    boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
+                  }} 
+                />
+              </StatusBadge>
+            </Tooltip>
+          </Box>
+        </Typography>
 
         {/* Tabs for Navigation */}
         {/* Removed as per edit hint */}

@@ -453,52 +453,67 @@ app.get('/api/items', async (req, res) => {
         // Get all items from items_data collection
         const itemsSnapshot = await db.collection('items_data').get();
         let items = [];
+        let skippedItems = 0;
 
         itemsSnapshot.forEach(doc => {
-            const itemData = doc.data();
-            
-            // Filter out items with manufacturer 'service' or 'goods'
-            const manufacturer = (itemData.manufacturer || '').toLowerCase();
-            if (manufacturer === 'service' || manufacturer === 'goods') {
-                return; // Skip this item
-            }
-
-            // Filter by status if filterInactive is true
-            if (filterInactive && itemData.status !== 'active') {
-                return; // Skip inactive items
-            }
-
-            // Filter by search text
-            if (searchText) {
-                const searchLower = searchText.toLowerCase();
-                const nameMatch = (itemData.name || '').toLowerCase().includes(searchLower);
-                const skuMatch = (itemData.sku || '').toLowerCase().includes(searchLower);
-                const descriptionMatch = (itemData.description || '').toLowerCase().includes(searchLower);
+            try {
+                const itemData = doc.data();
                 
-                if (!nameMatch && !skuMatch && !descriptionMatch) {
-                    return; // Skip if no match
+                // Skip if no item data
+                if (!itemData) {
+                    skippedItems++;
+                    return;
                 }
-            }
+                
+                // Filter out items with manufacturer 'service' or 'goods'
+                const manufacturer = String(itemData.manufacturer || '').toLowerCase();
+                if (manufacturer === 'service' || manufacturer === 'goods') {
+                    skippedItems++;
+                    return; // Skip this item
+                }
 
-            // Transform to match the expected format
-            items.push({
-                item_id: itemData.item_id || doc.id,
-                sku: itemData.sku,
-                name: itemData.name || itemData.item_name,
-                description: itemData.description,
-                manufacturer: itemData.manufacturer,
-                brand: itemData.brand,
-                rate: itemData.rate,
-                purchase_rate: itemData.purchase_rate,
-                status: itemData.status,
-                available_stock: itemData.available_stock,
-                stock_on_hand: itemData.stock_on_hand,
-                created_time: itemData.created_time,
-                last_modified_time: itemData.last_modified_time,
-                product_type: itemData.product_type,
-                item_type: itemData.item_type,
-                // Add any other fields you need
-            });
+                // Filter by status if filterInactive is true
+                if (filterInactive && itemData.status !== 'active') {
+                    skippedItems++;
+                    return; // Skip inactive items
+                }
+
+                // Filter by search text
+                if (searchText) {
+                    const searchLower = searchText.toLowerCase();
+                    const nameMatch = String(itemData.name || '').toLowerCase().includes(searchLower);
+                    const skuMatch = String(itemData.sku || '').toLowerCase().includes(searchLower);
+                    const descriptionMatch = String(itemData.description || '').toLowerCase().includes(searchLower);
+                    
+                    if (!nameMatch && !skuMatch && !descriptionMatch) {
+                        skippedItems++;
+                        return; // Skip if no match
+                    }
+                }
+
+                // Transform to match the expected format
+                items.push({
+                    item_id: itemData.item_id || doc.id,
+                    sku: itemData.sku,
+                    name: itemData.name || itemData.item_name,
+                    description: itemData.description,
+                    manufacturer: itemData.manufacturer,
+                    brand: itemData.brand,
+                    rate: itemData.rate,
+                    purchase_rate: itemData.purchase_rate,
+                    status: itemData.status,
+                    available_stock: itemData.available_stock,
+                    stock_on_hand: itemData.stock_on_hand,
+                    created_time: itemData.created_time,
+                    last_modified_time: itemData.last_modified_time,
+                    product_type: itemData.product_type,
+                    item_type: itemData.item_type,
+                    // Add any other fields you need
+                });
+            } catch (itemError) {
+                console.error(`Error processing item ${doc.id}:`, itemError);
+                skippedItems++;
+            }
         });
 
         // Sort items
@@ -528,7 +543,7 @@ app.get('/api/items', async (req, res) => {
         const endIndex = startIndex + perPage;
         const paginatedItems = items.slice(startIndex, endIndex);
 
-        console.log(`Fetched ${paginatedItems.length} items from items_data collection (page ${page}, total ${total})`);
+        console.log(`Fetched ${paginatedItems.length} items from items_data collection (page ${page}, total ${total}, skipped ${skippedItems})`);
         
         res.json({
             success: true,
