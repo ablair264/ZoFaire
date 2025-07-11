@@ -1029,6 +1029,132 @@ app.get('/api/firebase/items', async (req, res) => {
     }
 });
 
+// NEW: Preview cleanup of duplicate items (ITEM_* documents)
+app.get('/api/firebase/preview-cleanup', async (req, res) => {
+    try {
+        const { db } = initializeFirebase();
+        if (!db) {
+            return res.status(503).json({ success: false, message: 'Firestore not initialized' });
+        }
+        
+        console.log('Previewing cleanup of duplicate items...');
+        
+        const snapshot = await db.collection('items_data').get();
+        
+        if (snapshot.empty) {
+            return res.json({ 
+                success: true, 
+                message: 'No documents found in items_data collection.',
+                summary: { total: 0, toDelete: 0, toKeep: 0 }
+            });
+        }
+        
+        let toDeleteCount = 0;
+        let toKeepCount = 0;
+        const toDelete = [];
+        const toKeep = [];
+        
+        snapshot.forEach(doc => {
+            const docId = doc.id;
+            const data = doc.data();
+            
+            if (docId.startsWith('ITEM_')) {
+                toDelete.push({
+                    id: docId,
+                    sku: data.sku || 'No SKU',
+                    name: data.name || data.item_name || 'No Name'
+                });
+                toDeleteCount++;
+            } else {
+                toKeep.push({
+                    id: docId,
+                    sku: data.sku || 'No SKU',
+                    name: data.name || data.item_name || 'No Name'
+                });
+                toKeepCount++;
+            }
+        });
+        
+        res.json({
+            success: true,
+            message: 'Preview completed successfully',
+            summary: {
+                total: snapshot.size,
+                toDelete: toDeleteCount,
+                toKeep: toKeepCount
+            },
+            toDelete: toDelete.slice(0, 20), // Show first 20 for preview
+            toKeep: toKeep.slice(0, 20) // Show first 20 for preview
+        });
+        
+    } catch (error) {
+        console.error('Error previewing cleanup:', error);
+        res.status(500).json({ success: false, message: 'Failed to preview cleanup', error: error.message });
+    }
+});
+
+// NEW: Execute cleanup of duplicate items (ITEM_* documents)
+app.post('/api/firebase/cleanup-duplicates', async (req, res) => {
+    try {
+        const { db } = initializeFirebase();
+        if (!db) {
+            return res.status(503).json({ success: false, message: 'Firestore not initialized' });
+        }
+        
+        console.log('Starting cleanup of duplicate items...');
+        
+        const snapshot = await db.collection('items_data').get();
+        
+        if (snapshot.empty) {
+            return res.json({ 
+                success: true, 
+                message: 'No documents found in items_data collection.',
+                summary: { total: 0, deleted: 0, skipped: 0 }
+            });
+        }
+        
+        let deletedCount = 0;
+        let skippedCount = 0;
+        const deletedDocs = [];
+        const errors = [];
+        
+        // Process each document
+        for (const doc of snapshot.docs) {
+            const docId = doc.id;
+            
+            if (docId.startsWith('ITEM_')) {
+                try {
+                    await doc.ref.delete();
+                    console.log(`Deleted document: ${docId}`);
+                    deletedDocs.push(docId);
+                    deletedCount++;
+                } catch (error) {
+                    console.error(`Error deleting document ${docId}:`, error);
+                    errors.push({ docId, error: error.message });
+                }
+            } else {
+                skippedCount++;
+            }
+        }
+        
+        res.json({
+            success: true,
+            message: 'Cleanup completed successfully',
+            summary: {
+                total: snapshot.size,
+                deleted: deletedCount,
+                skipped: skippedCount
+            },
+            deletedDocs: deletedDocs.slice(0, 50), // Show first 50 deleted
+            errors: errors
+        });
+        
+    } catch (error) {
+        console.error('Error during cleanup:', error);
+        res.status(500).json({ success: false, message: 'Failed to execute cleanup', error: error.message });
+    }
+});
+
 
 // Fallback for any other request (API only backend)
 app.use((req, res) => {

@@ -1112,39 +1112,17 @@ const ZohoFaireIntegration = () => {
                 Refresh
               </Button>
               
-              <FormControl size="small" sx={{ minWidth: 150 }}>
-                <InputLabel id="manufacturer-filter-label">
-                  <FilterListIcon sx={{ fontSize: 16, mr: 0.5 }} />
-                  Manufacturer
-                </InputLabel>
+              <FormControl size="small" sx={{ minWidth: 180, mr: 2 }}>
+                <InputLabel id="manufacturer-filter-label">Manufacturer</InputLabel>
                 <Select
                   labelId="manufacturer-filter-label"
                   value={selectedManufacturer}
-                  onChange={(e) => setSelectedManufacturer(e.target.value)}
                   label="Manufacturer"
-                  renderValue={(selected) => {
-                    if (selected === 'all') return 'All Manufacturers';
-                    // Find the manufacturer object
-                    const mfr = manufacturers.find(m => m.normalized === selected);
-                    const displayName = mfr ? mfr.original : selected;
-                    
-                    return (
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                        <BrandAvatar brand={displayName} size={20} />
-                        <span>{displayName}</span>
-                      </Box>
-                    );
-                  }}
+                  onChange={e => setSelectedManufacturer(e.target.value)}
                 >
-                  <MenuItem value="all">All Manufacturers</MenuItem>
-                  <Divider />
-                  {manufacturers.map(mfr => (
-                    <MenuItem key={mfr.normalized} value={mfr.normalized}>
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                        <BrandAvatar brand={mfr.original} size={24} />
-                        <span>{mfr.original}</span>
-                      </Box>
-                    </MenuItem>
+                  <MenuItem value="">All</MenuItem>
+                  {manufacturerOptions.filter(opt => opt).map(opt => (
+                    <MenuItem key={opt} value={opt}>{opt}</MenuItem>
                   ))}
                 </Select>
               </FormControl>
