@@ -129,7 +129,11 @@ const runImageProcessor = (inputPath, outputDir, options = {}) => {
 
 
 // Middleware
-app.use(cors({ origin: '*', methods: ['GET', 'POST', 'PUT', 'DELETE'] }));
+app.use(cors({ 
+    origin: ['https://zofaire.netlify.app', 'http://localhost:3000', 'https://zofaire.onrender.com'], 
+    methods: ['GET', 'POST', 'PUT', 'DELETE'],
+    credentials: true
+}));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
@@ -193,6 +197,32 @@ app.get('/api/auth/status', (req, res) => {
     // A simple check: if a refresh token exists, we assume we can re-authenticate
     const isAuthenticated = !!process.env.ZOHO_REFRESH_TOKEN;
     res.json({ isAuthenticated });
+});
+
+// NEW: Route to check Firebase status
+app.get('/api/firebase/status', (req, res) => {
+    try {
+        const connected = !!(firebaseStorage && firebaseDb);
+        res.json({ 
+            connected,
+            message: connected ? 'Firebase is connected' : 'Firebase is not configured'
+        });
+    } catch (error) {
+        res.json({ 
+            connected: false, 
+            message: 'Firebase connection failed',
+            error: error.message 
+        });
+    }
+});
+
+// NEW: Route to check Faire status
+app.get('/api/faire/status', (req, res) => {
+    const connected = !!process.env.FAIRE_ACCESS_TOKEN;
+    res.json({ 
+        connected,
+        message: connected ? 'Faire API key is configured' : 'Faire API key is not configured'
+    });
 });
 
 // Health check endpoint

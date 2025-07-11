@@ -395,7 +395,7 @@ const ZohoFaireIntegration = () => {
       // Convert to array of objects sorted by original name
       const uniqueManufacturers = Array.from(manufacturerMap.entries())
         .map(([normalized, original]) => ({ normalized, original }))
-        .sort((a, b) => a.original.toLowerCase().localeCompare(b.original.toLowerCase()));
+        .sort((a, b) => (a.original || '').toLowerCase().localeCompare((b.original || '').toLowerCase()));
       
       setManufacturers(uniqueManufacturers);
     }
@@ -881,7 +881,24 @@ const ZohoFaireIntegration = () => {
       </Snackbar>
 
       {/* Progress Loader Overlay */}
-      {loading && <ProgressLoader message={getSyncButtonText()} />}
+      {loading && (
+        <ProgressLoader 
+          message={getSyncButtonText()} 
+          variant="overlay"
+          size={50}
+        />
+      )}
+      
+      {/* Image Matching Progress Overlay */}
+      {isMatching && (
+        <ProgressLoader 
+          message="Matching Images..."
+          submessage={`${matchProgress.current} / ${matchProgress.total} items processed`}
+          progress={matchProgress.total > 0 ? (matchProgress.current / matchProgress.total) * 100 : 0}
+          variant="overlay"
+          size={50}
+        />
+      )}
 
       <Paper
         elevation={theme.palette.mode === 'dark' ? 5 : 3}
@@ -1115,17 +1132,6 @@ const ZohoFaireIntegration = () => {
               </Button>
             )}
           </Toolbar>
-
-          {(loading || isMatching) && (
-            <Box sx={{ px: 2, pb: 1 }}>
-              <LinearProgress />
-              {isMatching && matchProgress.total > 0 && (
-                <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
-                  Matching images: {matchProgress.current} / {matchProgress.total}
-                </Typography>
-              )}
-            </Box>
-          )}
 
           <TableContainer>
             <Table aria-label="zoho items table" stickyHeader>

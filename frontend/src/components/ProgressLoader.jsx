@@ -8,6 +8,7 @@ import {
   useTheme,
   alpha,
   Fade,
+  CircularProgress,
 } from '@mui/material';
 import Lottie from 'lottie-react';
 import loaderAnimation from '../loader.json';
@@ -16,25 +17,28 @@ const ProgressLoader = ({
   progress, 
   message = 'Loading...', 
   submessage,
-  size = 100,
-  variant = 'default'
+  size = 60,
+  variant = 'overlay'
 }) => {
   const theme = useTheme();
   const isDarkMode = theme.palette.mode === 'dark';
+
+  // Fix NaN% issue by ensuring progress is a valid number
+  const validProgress = typeof progress === 'number' && !isNaN(progress) ? Math.max(0, Math.min(100, progress)) : 0;
 
   if (variant === 'minimal') {
     return (
       <Box sx={{ width: '100%' }}>
         <LinearProgress 
           variant="determinate" 
-          value={progress}
+          value={validProgress}
           sx={{
-            height: 8,
-            borderRadius: 4,
+            height: 6,
+            borderRadius: 3,
             backgroundColor: alpha(theme.palette.primary.main, 0.1),
             '& .MuiLinearProgress-bar': {
-              borderRadius: 4,
-              background: theme.gradients.accent,
+              borderRadius: 3,
+              background: theme.gradients?.accent || theme.palette.primary.main,
             }
           }}
         />
@@ -48,9 +52,9 @@ const ProgressLoader = ({
         display: 'flex',
         flexDirection: 'column',
         alignItems: 'center',
-        gap: 3,
+        gap: 2,
         width: '100%',
-        maxWidth: 400,
+        maxWidth: 300,
       }}
     >
       {/* Lottie Animation with backdrop */}
@@ -67,12 +71,12 @@ const ProgressLoader = ({
             top: '50%',
             left: '50%',
             transform: 'translate(-50%, -50%)',
-            width: size * 1.5,
-            height: size * 1.5,
-            background: theme.gradients.accent,
+            width: size * 1.2,
+            height: size * 1.2,
+            background: theme.gradients?.accent || theme.palette.primary.main,
             borderRadius: '50%',
             opacity: 0.1,
-            filter: 'blur(40px)',
+            filter: 'blur(20px)',
           }}
         />
         <Lottie 
@@ -91,14 +95,14 @@ const ProgressLoader = ({
       {/* Text Information */}
       <Box sx={{ textAlign: 'center' }}>
         <Typography 
-          variant="h5" 
+          variant="h6" 
           sx={{ 
             fontWeight: 600,
-            background: theme.gradients.primary,
+            background: theme.gradients?.primary || theme.palette.primary.main,
             backgroundClip: 'text',
             WebkitBackgroundClip: 'text',
             color: 'transparent',
-            mb: 1,
+            mb: 0.5,
           }}
         >
           {message}
@@ -106,7 +110,7 @@ const ProgressLoader = ({
         {submessage && (
           <Fade in={true} timeout={600}>
             <Typography 
-              variant="body2" 
+              variant="caption" 
               color="text.secondary"
               sx={{ opacity: 0.8 }}
             >
@@ -116,55 +120,57 @@ const ProgressLoader = ({
         )}
       </Box>
       
-      {/* Progress Bar Container */}
-      <Box sx={{ width: '100%' }}>
-        <Box
-          sx={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 2,
-            mb: 1,
-          }}
-        >
-          <LinearProgress
-            variant="determinate"
-            value={progress}
+      {/* Progress Bar Container - Only show if progress is provided */}
+      {typeof progress === 'number' && (
+        <Box sx={{ width: '100%' }}>
+          <Box
             sx={{
-              flexGrow: 1,
-              height: 10,
-              borderRadius: 5,
-              backgroundColor: alpha(theme.palette.primary.main, isDarkMode ? 0.2 : 0.1),
-              '& .MuiLinearProgress-bar': {
-                borderRadius: 5,
-                background: theme.gradients.accent,
-                position: 'relative',
-                overflow: 'hidden',
-                '&::after': {
-                  content: '""',
-                  position: 'absolute',
-                  top: 0,
-                  left: 0,
-                  bottom: 0,
-                  right: 0,
-                  background: 'linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent)',
-                  animation: 'shimmer 1.5s infinite',
-                },
-              },
-            }}
-          />
-          <Typography 
-            variant="h6" 
-            sx={{ 
-              fontWeight: 600,
-              color: theme.palette.primary.main,
-              minWidth: 50,
-              textAlign: 'right',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 1,
+              mb: 0.5,
             }}
           >
-            {Math.round(progress)}%
-          </Typography>
+            <LinearProgress
+              variant="determinate"
+              value={validProgress}
+              sx={{
+                flexGrow: 1,
+                height: 6,
+                borderRadius: 3,
+                backgroundColor: alpha(theme.palette.primary.main, isDarkMode ? 0.2 : 0.1),
+                '& .MuiLinearProgress-bar': {
+                  borderRadius: 3,
+                  background: theme.gradients?.accent || theme.palette.primary.main,
+                  position: 'relative',
+                  overflow: 'hidden',
+                  '&::after': {
+                    content: '""',
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                    bottom: 0,
+                    right: 0,
+                    background: 'linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent)',
+                    animation: 'shimmer 1.5s infinite',
+                  },
+                },
+              }}
+            />
+            <Typography 
+              variant="caption" 
+              sx={{ 
+                fontWeight: 600,
+                color: theme.palette.primary.main,
+                minWidth: 35,
+                textAlign: 'right',
+              }}
+            >
+              {Math.round(validProgress)}%
+            </Typography>
+          </Box>
         </Box>
-      </Box>
+      )}
     </Box>
   );
 
@@ -180,17 +186,18 @@ const ProgressLoader = ({
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          backgroundColor: alpha(isDarkMode ? '#000' : '#fff', 0.8),
-          backdropFilter: 'blur(10px)',
+          backgroundColor: alpha(isDarkMode ? '#000' : '#fff', 0.7),
+          backdropFilter: 'blur(8px)',
           zIndex: 9999,
         }}
       >
         <Paper
           sx={{
-            p: 4,
-            borderRadius: 3,
+            p: 3,
+            borderRadius: 2,
             backgroundColor: theme.palette.background.paper,
-            boxShadow: theme.shadows[20],
+            boxShadow: theme.shadows[15],
+            border: `1px solid ${alpha(theme.palette.divider, 0.1)}`,
           }}
         >
           {content}
@@ -205,7 +212,7 @@ const ProgressLoader = ({
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        p: 3,
+        p: 2,
       }}
     >
       {content}
