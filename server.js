@@ -756,7 +756,7 @@ app.post('/api/firebase/match-images', async (req, res) => {
     }
 });
 
-// NEW: Workflow match images endpoint (alias for frontend compatibility)
+// NEW: Workflow match images endpoint (alias for frontend compatibility) - UPDATED
 app.post('/api/workflow/match-images', async (req, res) => {
     try {
         // Accept both 'items' and 'products' for compatibility
