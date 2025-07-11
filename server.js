@@ -189,8 +189,8 @@ app.get('/auth/zoho/callback', async (req, res) => {
                 <body style="font-family: Arial, sans-serif; padding: 40px; text-align: center;">
                     <h2 style="color: #4CAF50;">✅ Authentication Successful!</h2>
                     <p>Zoho Inventory access has been granted.</p>
-                    <p><strong>Access Token:</strong> ${data.access_token.substring(0, 20)}...</p>
-                    <p><strong>Expires in:</strong> ${Math.floor(data.expires_in / 3600)} hours</p>
+                    <p><strong>Access Token:</strong> ${data.access_token ? data.access_token.substring(0, 20) + '...' : 'Token received'}</p>
+                    <p><strong>Expires in:</strong> ${data.expires_in ? Math.floor(data.expires_in / 3600) + ' hours' : 'Standard duration'}</p>
                     <br>
                     <a href="/" style="background: #2196F3; color: white; padding: 12px 24px; text-decoration: none; border-radius: 4px; margin-right: 10px;">Go to Dashboard</a>
                     <a href="/auth/status" style="background: #4CAF50; color: white; padding: 12px 24px; text-decoration: none; border-radius: 4px;">Check Status</a>
@@ -199,8 +199,9 @@ app.get('/auth/zoho/callback', async (req, res) => {
                         <h3>⚠️ Important: Save These Environment Variables</h3>
                         <p>Add these to your Render environment variables for persistent authentication:</p>
                         <code style="display: block; background: white; padding: 10px; margin: 10px 0; border-radius: 4px;">
-                            ZOHO_ACCESS_TOKEN=${data.access_token}<br>
-                            ZOHO_REFRESH_TOKEN=${data.refresh_token}
+                            ZOHO_ACCESS_TOKEN=${data.access_token || 'token_received'}<br>
+                            ZOHO_REFRESH_TOKEN=${data.refresh_token || 'refresh_token_received'}<br>
+                            ZOHO_BASE_URL=https://www.zohoapis.eu/inventory/v1
                         </code>
                         <p><small>This will prevent re-authentication on server restarts.</small></p>
                     </div>
