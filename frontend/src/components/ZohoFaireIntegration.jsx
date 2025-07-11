@@ -452,6 +452,11 @@ const ZohoFaireIntegration = () => {
     }
   }, [zohoItems]);
 
+  // Create manufacturerOptions from manufacturers data
+  const manufacturerOptions = useMemo(() => {
+    return manufacturers.map(m => m.original).filter(Boolean);
+  }, [manufacturers]);
+
   // Load product images when image dialog opens
   useEffect(() => {
     if (imageDialog && selectedProduct) {
@@ -822,7 +827,11 @@ const ZohoFaireIntegration = () => {
       const itemSku = String(item.sku || '');
       const manufacturerName = getManufacturerName(item);
       const searchLower = String(searchTerm || '').toLowerCase();
-      const manufacturerFilter = !selectedManufacturer || manufacturerName.toLowerCase().includes(selectedManufacturer.toLowerCase());
+      
+      // Manufacturer filter: if no manufacturer selected, show all; otherwise match exactly
+      const manufacturerFilter = !selectedManufacturer || selectedManufacturer === '' || 
+        manufacturerName.toLowerCase() === selectedManufacturer.toLowerCase();
+      
       return (
         (itemName.toLowerCase().includes(searchLower) ||
         itemSku.toLowerCase().includes(searchLower)) &&
