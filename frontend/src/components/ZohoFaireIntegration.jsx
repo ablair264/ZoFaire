@@ -807,6 +807,14 @@ const ZohoFaireIntegration = () => {
     }
   };
 
+  const getManufacturerName = (item) => {
+    if (!item.manufacturer) return '';
+    if (typeof item.manufacturer === 'string') return item.manufacturer;
+    if (typeof item.manufacturer === 'object' && item.manufacturer.manufacturer_name)
+      return item.manufacturer.manufacturer_name;
+    return '';
+  };
+
   const filteredItems = useMemo(() => {
     return zohoItems.filter(item => {
       const itemName = String(item.name || '');
@@ -821,15 +829,6 @@ const ZohoFaireIntegration = () => {
       );
     });
   }, [zohoItems, searchTerm, selectedManufacturer]);
-
-  const getManufacturerName = (item) => {
-    if (!item.manufacturer) return '';
-    if (typeof item.manufacturer === 'string') return item.manufacturer;
-    if (typeof item.manufacturer === 'object' && item.manufacturer.manufacturer_name)
-      return item.manufacturer.manufacturer_name;
-    return '';
-  };
-
 
   const handleCompleteSync = async () => {
     setLoading(true);
