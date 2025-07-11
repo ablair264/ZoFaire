@@ -357,6 +357,12 @@ const ZohoFaireIntegration = () => {
       }
     });
     
+    // Handle manufacturer field that might be a map/object
+    if (cleanItem.manufacturer && typeof cleanItem.manufacturer === 'object' && cleanItem.manufacturer.manufacturer_name) {
+      cleanItem.manufacturer = cleanItem.manufacturer.manufacturer_name;
+      console.log(`📝 Extracted manufacturer_name "${cleanItem.manufacturer}" from manufacturer map for item ${cleanItem.sku || cleanItem.item_id}`);
+    }
+    
     // Ensure all text fields are strings
     const textFields = ['name', 'sku', 'manufacturer', 'brand', 'description', 'status', 'product_type', 'item_type'];
     textFields.forEach(field => {

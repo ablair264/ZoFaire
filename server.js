@@ -503,8 +503,16 @@ app.get('/api/items', async (req, res) => {
                     return;
                 }
                 
+                // Handle manufacturer field that might be a map/object
+                let manufacturerName = itemData.manufacturer || '';
+                
+                // If manufacturer is an object/map, extract manufacturer_name
+                if (manufacturerName && typeof manufacturerName === 'object' && manufacturerName.manufacturer_name) {
+                    manufacturerName = manufacturerName.manufacturer_name;
+                }
+                
                 // Filter out items with manufacturer 'service' or 'goods'
-                const manufacturer = String(itemData.manufacturer || '').toLowerCase();
+                const manufacturer = String(manufacturerName || '').toLowerCase();
                 if (manufacturer === 'service' || manufacturer === 'goods') {
                     skippedItems++;
                     return; // Skip this item
@@ -535,7 +543,7 @@ app.get('/api/items', async (req, res) => {
                     sku: itemData.sku,
                     name: itemData.name || itemData.item_name,
                     description: itemData.description,
-                    manufacturer: itemData.manufacturer,
+                    manufacturer: manufacturerName, // Use the extracted manufacturer name
                     brand: itemData.brand,
                     rate: itemData.rate,
                     purchase_rate: itemData.purchase_rate,

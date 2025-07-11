@@ -250,6 +250,14 @@ async function saveItemToFirestore(item, images) {
     
     const docRef = db.collection('zofaire_items').doc(item.item_id);
     
+    // Handle manufacturer field that might be a map/object
+    let manufacturerName = item.manufacturer || item.brand;
+    
+    // If manufacturer is an object/map, extract manufacturer_name
+    if (manufacturerName && typeof manufacturerName === 'object' && manufacturerName.manufacturer_name) {
+      manufacturerName = manufacturerName.manufacturer_name;
+    }
+    
     const data = {
       ...item,
       images: images.map(img => ({
@@ -263,7 +271,7 @@ async function saveItemToFirestore(item, images) {
       imageCount: images.filter(img => !img.isVariant).length,
       hasImages: images.length > 0,
       lastUpdated: admin.firestore.FieldValue.serverTimestamp(),
-      normalizedManufacturer: normalizeBrandName(item.manufacturer || item.brand)
+      normalizedManufacturer: normalizeBrandName(manufacturerName)
     };
     
     await docRef.set(data, { merge: true });
@@ -301,7 +309,16 @@ async function matchProductsWithImages(products) {
       
       const batchResults = await Promise.all(batch.map(async (product) => {
         try {
-          const manufacturer = normalizeBrandName(product.manufacturer || product.brand);
+          // Handle manufacturer field that might be a map/object
+          let manufacturerName = product.manufacturer || product.brand;
+          
+          // If manufacturer is an object/map, extract manufacturer_name
+          if (manufacturerName && typeof manufacturerName === 'object' && manufacturerName.manufacturer_name) {
+            manufacturerName = manufacturerName.manufacturer_name;
+            console.log(`📝 Extracted manufacturer_name "${manufacturerName}" from manufacturer map for SKU ${product.sku}`);
+          }
+          
+          const manufacturer = normalizeBrandName(manufacturerName);
           const sku = product.sku;
           
           if (!sku) {
