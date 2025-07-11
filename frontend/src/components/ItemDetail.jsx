@@ -99,21 +99,6 @@ const ItemDetail = ({ open, onClose, item }) => {
 
   if (!item) return null;
 
-  // Debug: Log the item to see what we're working with
-  console.log('ItemDetail received item:', item);
-  
-  // Check for any problematic object fields that might cause rendering issues
-  const problematicFields = ['manufacturer_contact', 'manufacturer_part_number', 'manufacturer_name', 'manufacturer_website'];
-  const hasProblematicFields = problematicFields.some(field => 
-    item[field] && typeof item[field] === 'object'
-  );
-  
-  if (hasProblematicFields) {
-    console.warn('ItemDetail: Item contains problematic object fields:', 
-      problematicFields.filter(field => item[field] && typeof item[field] === 'object')
-    );
-  }
-
   return (
     <Dialog
       open={open}

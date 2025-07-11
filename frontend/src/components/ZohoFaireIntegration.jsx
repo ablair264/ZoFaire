@@ -342,6 +342,32 @@ const ZohoFaireIntegration = () => {
     fetch(`${API_BASE_URL}/firebase/status`).then(res => res.json()).then(data => setFirebaseStatus(data.connected)).catch(() => setFirebaseStatus(false));
   }, []);
 
+  // Helper function to clean item data and prevent rendering issues
+  const cleanItemData = (item) => {
+    if (!item) return null;
+    
+    // Remove any problematic object fields
+    const problematicFields = ['manufacturer_contact', 'manufacturer_part_number', 'manufacturer_name', 'manufacturer_website'];
+    const cleanItem = { ...item };
+    
+    problematicFields.forEach(field => {
+      if (cleanItem[field] && typeof cleanItem[field] === 'object') {
+        console.warn(`Removing problematic object field: ${field} from item ${cleanItem.sku || cleanItem.item_id}`);
+        delete cleanItem[field];
+      }
+    });
+    
+    // Ensure all text fields are strings
+    const textFields = ['name', 'sku', 'manufacturer', 'brand', 'description', 'status', 'product_type', 'item_type'];
+    textFields.forEach(field => {
+      if (cleanItem[field] && typeof cleanItem[field] !== 'string') {
+        cleanItem[field] = String(cleanItem[field]);
+      }
+    });
+    
+    return cleanItem;
+  };
+
   // Fetch Items from items_data collection
   const fetchItems = useCallback(async (showLoading = true) => {
     if (showLoading) setLoading(true);
@@ -363,9 +389,13 @@ const ZohoFaireIntegration = () => {
         throw new Error(errorData.message || 'Failed to fetch items');
       }
       const data = await response.json();
-      setZohoItems(data.items || []);
+      
+      // Clean all items before setting them
+      const cleanedItems = (data.items || []).map(cleanItemData).filter(Boolean);
+      setZohoItems(cleanedItems);
+      
       // Use total count from response
-      setZohoItemsFetchedCount(data.total || (data.items ? data.items.length : 0));
+      setZohoItemsFetchedCount(data.total || cleanedItems.length);
       showSnackbar('Items fetched successfully!', 'success');
     } catch (error) {
       console.error('Error fetching items:', error);
@@ -487,22 +517,11 @@ const ZohoFaireIntegration = () => {
   const isSelected = (itemId) => selectedItems.has(itemId);
 
   const handleItemClick = (item) => {
-    // Debug: Check if item contains any objects that shouldn't be rendered
-    console.log('Item being passed to ItemDetail:', item);
+    // Clean the item before passing it to ItemDetail
+    const cleanedItem = cleanItemData(item);
+    console.log('Cleaned item being passed to ItemDetail:', cleanedItem);
     
-    // Check for any nested objects that might cause rendering issues
-    const problematicFields = ['manufacturer_contact', 'manufacturer_part_number', 'manufacturer_name', 'manufacturer_website'];
-    const hasProblematicFields = problematicFields.some(field => 
-      item[field] && typeof item[field] === 'object'
-    );
-    
-    if (hasProblematicFields) {
-      console.warn('Item contains problematic object fields:', 
-        problematicFields.filter(field => item[field] && typeof item[field] === 'object')
-      );
-    }
-    
-    setSelectedItem(item);
+    setSelectedItem(cleanedItem);
     setDetailDialogOpen(true);
   };
 
@@ -1344,7 +1363,9 @@ const ZohoFaireIntegration = () => {
                                   color="primary"
                                   onClick={(e) => {
                                     e.stopPropagation();
-                                    setSelectedProduct(item);
+                                    // Clean the item before setting it to avoid rendering issues
+                                    const cleanedItem = cleanItemData(item);
+                                    setSelectedProduct(cleanedItem);
                                     setImageDialog(true);
                                   }}
                                 >
@@ -1415,9 +1436,9 @@ const ZohoFaireIntegration = () => {
         fullWidth
       >
         <DialogTitle>
-          {selectedProduct?.name} - Images
+          {typeof selectedProduct?.name === 'string' ? selectedProduct.name : 'Product'} - Images
           <Typography variant="caption" display="block">
-            SKU: {selectedProduct?.sku}
+            SKU: {typeof selectedProduct?.sku === 'string' ? selectedProduct.sku : 'No SKU'}
           </Typography>
         </DialogTitle>
         
@@ -1484,7 +1505,7 @@ const ZohoFaireIntegration = () => {
         fullWidth
       >
         <DialogTitle>
-          Upload Images - {selectedProduct?.name}
+          Upload Images - {typeof selectedProduct?.name === 'string' ? selectedProduct.name : 'Product'}
         </DialogTitle>
         
         <DialogContent>
