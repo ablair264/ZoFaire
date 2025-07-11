@@ -720,6 +720,7 @@ const ZohoFaireIntegration = () => {
         <ImageManagement 
           zohoItems={zohoItems} 
           onAlert={addAlert}
+          onRefreshItems={() => fetchZohoItems(true)}
         />
       )}
     </Box>
