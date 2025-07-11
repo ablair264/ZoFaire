@@ -715,7 +715,7 @@ const ZohoFaireIntegration = () => {
           message: `Complete sync finished! ${data.summary?.matched || 0} items matched with images.`, 
           severity: 'success' 
         });
-        fetchItems(); // Refresh the items list
+        fetchItems(true); // Refresh the items list
       } else {
         const errorData = await response.json();
         throw new Error(errorData.message || 'Complete sync failed');
@@ -808,16 +808,19 @@ const ZohoFaireIntegration = () => {
   };
 
   const filteredItems = useMemo(() => {
-    // Note: Filtering by searchTerm is done on current page data.
-    // Full filtering should ideally happen via backend search_text param.
     return zohoItems.filter(item => {
       const itemName = String(item.name || '');
       const itemSku = String(item.sku || '');
+      const manufacturerName = getManufacturerName(item);
       const searchLower = String(searchTerm || '').toLowerCase();
-      return itemName.toLowerCase().includes(searchLower) ||
-             itemSku.toLowerCase().includes(searchLower);
+      const manufacturerFilter = selectedManufacturer ? manufacturerName.toLowerCase().includes(selectedManufacturer.toLowerCase()) : true;
+      return (
+        (itemName.toLowerCase().includes(searchLower) ||
+        itemSku.toLowerCase().includes(searchLower)) &&
+        manufacturerFilter
+      );
     });
-  }, [zohoItems, searchTerm]);
+  }, [zohoItems, searchTerm, selectedManufacturer]);
 
 
   const handleCompleteSync = async () => {
@@ -907,6 +910,14 @@ const ZohoFaireIntegration = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  const getManufacturerName = (item) => {
+    if (!item.manufacturer) return '';
+    if (typeof item.manufacturer === 'string') return item.manufacturer;
+    if (typeof item.manufacturer === 'object' && item.manufacturer.manufacturer_name)
+      return item.manufacturer.manufacturer_name;
+    return '';
   };
 
 
