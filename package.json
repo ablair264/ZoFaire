@@ -1,52 +1,40 @@
 {
   "name": "zoho-faire-integration",
-  "version": "0.1.0",
-  "private": true,
+  "version": "1.0.0",
+  "description": "Zoho to Faire integration with React frontend and Express backend",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "build": "npm install && npm run build-frontend && npm run setup-backend",
+    "build-frontend": "npm run install-frontend && npm run build-react",
+    "install-frontend": "npm install --prefix ./frontend",
+    "build-react": "cd frontend && npm run build",
+    "setup-backend": "mkdir -p build && cp -r frontend/build/* build/",
+    "dev": "concurrently \"npm run dev-frontend\" \"npm run dev-backend\"",
+    "dev-frontend": "cd frontend && npm start",
+    "dev-backend": "nodemon server.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "zoho",
+    "faire",
+    "inventory",
+    "marketplace",
+    "integration"
+  ],
+  "author": "Your Name",
+  "license": "MIT",
+  "engines": {
+    "node": ">=16.0.0"
+  },
   "dependencies": {
-    "@emotion/react": "^11.14.0",
-    "@emotion/styled": "^11.14.1",
-    "@mui/icons-material": "^7.2.0",
-    "@mui/material": "^7.2.0",
-    "@testing-library/dom": "^10.4.0",
-    "@testing-library/jest-dom": "^6.6.3",
-    "@testing-library/react": "^16.3.0",
-    "@testing-library/user-event": "^13.5.0",
-    "react": "^19.1.0",
-    "react-dom": "^19.1.0",
-    "react-scripts": "5.0.1",
-    "web-vitals": "^2.1.4"
+    "express": "^4.18.2",
+    "cors": "^2.8.5",
+    "axios": "^1.6.0",
+    "dotenv": "^16.3.1"
   },
   "devDependencies": {
-    "concurrently": "^7.6.0"
-  },
-  "scripts": {
-    "start": "react-scripts start",
-    "build": "react-scripts build && npm run copy-build",
-    "copy-build": "cp -r build/* backend/build/ || robocopy build backend\\build /E",
-    "test": "react-scripts test",
-    "eject": "react-scripts eject",
-    "dev": "concurrently \"npm start\" \"npm run server\"",
-    "server": "cd backend && npm run dev",
-    "install-backend": "cd backend && npm install",
-    "build-production": "npm run build && cd backend && npm install --production",
-    "heroku-postbuild": "npm run build"
-  },
-  "eslintConfig": {
-    "extends": [
-      "react-app",
-      "react-app/jest"
-    ]
-  },
-  "browserslist": {
-    "production": [
-      ">0.2%",
-      "not dead",
-      "not op_mini all"
-    ],
-    "development": [
-      "last 1 chrome version",
-      "last 1 firefox version",
-      "last 1 safari version"
-    ]
+    "concurrently": "^7.6.0",
+    "nodemon": "^3.0.1"
   }
 }
