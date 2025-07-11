@@ -52,19 +52,25 @@ const ZohoFaireIntegration = () => {
   });
   const [alerts, setAlerts] = useState([]);
   const [authStatus, setAuthStatus] = useState(null);
+  const [isCheckingAuth, setIsCheckingAuth] = useState(true);
 
   // Check authentication status
-  const checkAuthStatus = async () => {
+  const checkAuthStatus = useCallback(async () => {
+    setIsCheckingAuth(true);
     try {
       const response = await fetch(`${API_BASE_URL.replace('/api', '')}/auth/status`);
       const data = await response.json();
       setAuthStatus(data);
+      console.log('Auth status:', data); // Debug log
       return data.authenticated;
     } catch (error) {
       console.error('Error checking auth status:', error);
+      setAuthStatus({ authenticated: false, error: error.message });
       return false;
+    } finally {
+      setIsCheckingAuth(false);
     }
-  };
+  }, []);
 
   // Fetch data from Zoho Inventory API
   const fetchZohoItems = useCallback(async () => {
@@ -311,14 +317,20 @@ const ZohoFaireIntegration = () => {
 
   // Initialize data on component mount
   useEffect(() => {
-    checkAuthStatus().then(isAuthenticated => {
+    const initializeApp = async () => {
+      const isAuthenticated = await checkAuthStatus();
       if (isAuthenticated) {
         fetchZohoItems();
-      } else {
-        addAlert('warning', 'Authentication required. Please authenticate with Zoho.');
       }
-    });
-  }, [fetchZohoItems]);
+    };
+    
+    initializeApp();
+    
+    // Check auth status every 5 minutes
+    const authCheckInterval = setInterval(checkAuthStatus, 5 * 60 * 1000);
+    
+    return () => clearInterval(authCheckInterval);
+  }, [fetchZohoItems, checkAuthStatus]);
 
   // Check Faire status after fetching Zoho items
   useEffect(() => {
@@ -364,20 +376,63 @@ const ZohoFaireIntegration = () => {
       </Typography>
 
       {/* Authentication Status */}
-      {authStatus && !authStatus.authenticated && (
-        <Alert severity="warning" sx={{ mb: 3 }}>
-          <Typography variant="h6">Authentication Required</Typography>
-          <Typography>Please authenticate with Zoho to continue.</Typography>
-          <Button 
-            variant="contained" 
-            color="primary" 
-            sx={{ mt: 2 }}
-            onClick={() => window.open('/auth/zoho', '_blank')}
-          >
-            Authenticate with Zoho
-          </Button>
-        </Alert>
-      )}
+      <Card sx={{ mb: 3 }}>
+        <CardContent>
+          <Box display="flex" alignItems="center" justifyContent="space-between">
+            <Box display="flex" alignItems="center">
+              <Typography variant="h6" sx={{ mr: 2 }}>🔐 Zoho Authentication</Typography>
+              {isCheckingAuth ? (
+                <CircularProgress size={20} />
+              ) : authStatus?.authenticated ? (
+                <Chip 
+                  icon={<CheckCircleIcon />}
+                  label="Connected" 
+                  color="success" 
+                  size="small"
+                />
+              ) : (
+                <Chip 
+                  label="Not Connected" 
+                  color="error" 
+                  size="small"
+                />
+              )}
+            </Box>
+            
+            <Box>
+              <Button 
+                variant={authStatus?.authenticated ? "outlined" : "contained"}
+                color="primary"
+                onClick={() => window.open(`${API_BASE_URL.replace('/api', '')}/auth/zoho`, '_blank')}
+                sx={{ mr: 1 }}
+              >
+                {authStatus?.authenticated ? 'Re-authenticate' : 'Connect to Zoho'}
+              </Button>
+              <Button 
+                variant="outlined"
+                onClick={checkAuthStatus}
+                disabled={isCheckingAuth}
+              >
+                Check Status
+              </Button>
+            </Box>
+          </Box>
+          
+          {authStatus && (
+            <Box sx={{ mt: 2, p: 2, bgcolor: 'grey.50', borderRadius: 1 }}>
+              <Typography variant="body2" color="text.secondary">
+                <strong>Status:</strong> {authStatus.authenticated ? 'Authenticated' : 'Not Authenticated'}
+                {authStatus.expires_in_minutes && (
+                  <span> | <strong>Expires in:</strong> {authStatus.expires_in_minutes} minutes</span>
+                )}
+                {authStatus.has_refresh_token && (
+                  <span> | <strong>Refresh Token:</strong> Available</span>
+                )}
+              </Typography>
+            </Box>
+          )}
+        </CardContent>
+      </Card>
 
       {/* Metrics Cards */}
       <Grid container spacing={3} sx={{ mb: 4 }}>
@@ -451,7 +506,14 @@ const ZohoFaireIntegration = () => {
             
             <Tooltip title="Refresh from Zoho">
               <IconButton 
-                onClick={fetchZohoItems} 
+                onClick={async () => {
+                  const isAuthenticated = await checkAuthStatus();
+                  if (isAuthenticated) {
+                    fetchZohoItems();
+                  } else {
+                    addAlert('warning', 'Please authenticate with Zoho first');
+                  }
+                }}
                 disabled={loading}
                 color="primary"
               >
