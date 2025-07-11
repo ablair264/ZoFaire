@@ -248,8 +248,18 @@ async function saveItemToFirestore(item, images) {
       return;
     }
     
-    // Use items_data collection and use SKU as document ID for consistency
-    const docRef = db.collection('items_data').doc(item.sku || item.item_id);
+    // Use items_data collection and find the document by SKU field
+    const itemsDataQuery = await db.collection('items_data')
+      .where('sku', '==', item.sku)
+      .limit(1)
+      .get();
+    
+    if (itemsDataQuery.empty) {
+      console.warn(`⚠️  No items_data document found for SKU ${item.sku}, skipping save`);
+      return;
+    }
+    
+    const docRef = itemsDataQuery.docs[0].ref;
     
     // Handle manufacturer field that might be a map/object
     let manufacturerName = item.manufacturer || item.brand;
@@ -333,10 +343,37 @@ async function matchProductsWithImages(products) {
             };
           }
           
-          const images = await getProductImages(manufacturer, sku);
+          // Check if this product already has image data in items_data
+          const { db } = initializeFirebase();
+          let existingImages = [];
+          let skipImageMatching = false;
           
-          // Save to items_data collection with image information
-          await saveItemToFirestore(product, images);
+          if (db && product.sku) {
+            try {
+              const itemsDataQuery = await db.collection('items_data')
+                .where('sku', '==', product.sku)
+                .limit(1)
+                .get();
+              
+              if (!itemsDataQuery.empty) {
+                const itemData = itemsDataQuery.docs[0].data();
+                if (itemData.images && itemData.images.length > 0 && itemData.hasImages) {
+                  existingImages = itemData.images;
+                  skipImageMatching = true;
+                  console.log(`📸 SKU ${product.sku} already has ${existingImages.length} images, skipping image matching`);
+                }
+              }
+            } catch (err) {
+              console.error(`❌ Error checking existing images for SKU ${product.sku}:`, err.message);
+            }
+          }
+          
+          let images = existingImages;
+          if (!skipImageMatching) {
+            images = await getProductImages(manufacturer, sku);
+            // Save to items_data collection with image information
+            await saveItemToFirestore(product, images);
+          }
           
           if (images.length > 0) {
             results.matched++;

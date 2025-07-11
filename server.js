@@ -811,8 +811,8 @@ app.get('/api/firebase/product-images/:sku', async (req, res) => {
             return res.status(400).json({ success: false, message: 'Product has no manufacturer information' });
         }
 
-        // Get images for this manufacturer and SKU
-        const images = await getProductImages(manufacturerName, sku);
+        // Return the image data that's already stored in items_data
+        const images = itemData.images || [];
 
         res.json({
             success: true,
