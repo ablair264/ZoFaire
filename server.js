@@ -606,37 +606,98 @@ const fetchAllZohoItems = async (zohoHeaders, options = {}) => {
     let page = 1;
     let hasMore = true;
     const perPage = 200; // Max allowed by Zoho
-    const maxPages = options.maxPages || 50; // Safety limit
-    const delayMs = options.delayMs || 200; // Delay between requests
+    const maxPages = options.maxPages || 100;
+    const delayMs = options.delayMs || 300;
+    const filterInactive = options.filterInactive !== false; // Default true
+    const manufacturer = options.manufacturer || null;
     
     console.log('🔄 Starting to fetch all Zoho items...');
+    console.log(`   Settings: ${perPage} items/page, ${delayMs}ms delay, max ${maxPages} pages`);
+    if (filterInactive) console.log('   Filtering: Active items only');
+    if (manufacturer) console.log(`   Filtering: Only manufacturer "${manufacturer}"`);
     
-    while (hasMore && page <= maxPages) {
+    // Add retry logic for rate limiting
+    const makeRequest = async (attempt = 1) => {
         try {
+            // Build filter string for Zoho API
+            const filters = [];
+            
+            // Always filter by active status if filterInactive is true
+            if (filterInactive) {
+                filters.push('Status.StartsWith(Active)');
+            }
+            
+            const params = {
+                page: page,
+                per_page: perPage
+            };
+            
+            // Add filter string if we have filters
+            if (filters.length > 0) {
+                params.filter_by = filters.join(' and ');
+            }
+            
+            console.log(`   Requesting page ${page} with params:`, params);
+            
             const response = await axios.get(
                 `${ZOHO_BASE_URL}/items`,
                 {
                     headers: zohoHeaders,
-                    params: {
-                        page: page,
-                        per_page: perPage
-                    }
+                    params: params
                 }
             );
+            return response;
+        } catch (error) {
+            if (error.response?.status === 429 && attempt < 3) {
+                // Rate limited, wait and retry
+                const retryDelay = Math.pow(2, attempt) * 1000; // Exponential backoff
+                console.log(`   ⏳ Rate limited, retrying in ${retryDelay}ms...`);
+                await new Promise(resolve => setTimeout(resolve, retryDelay));
+                return makeRequest(attempt + 1);
+            }
+            throw error;
+        }
+    };
+    
+    while (hasMore && page <= maxPages) {
+        try {
+            const response = await makeRequest();
             
             if (response.data.code === 0) {
-                const items = response.data.items || [];
+                let items = response.data.items || [];
+                
+                // Double-check status filter on our side (in case Zoho API doesn't filter properly)
+                if (filterInactive) {
+                    const beforeCount = items.length;
+                    items = items.filter(item => 
+                        item.status && item.status.toLowerCase() === 'active'
+                    );
+                    if (beforeCount !== items.length) {
+                        console.log(`   Filtered out ${beforeCount - items.length} inactive items`);
+                    }
+                }
+                
+                // Apply manufacturer filter if specified
+                if (manufacturer) {
+                    items = items.filter(item => 
+                        item.manufacturer?.toLowerCase() === manufacturer.toLowerCase() ||
+                        item.brand?.toLowerCase() === manufacturer.toLowerCase()
+                    );
+                }
+                
                 allItems.push(...items);
                 
                 const pageContext = response.data.page_context || {};
                 hasMore = pageContext.has_more_page || false;
+                const total = pageContext.total || 'unknown';
                 
-                console.log(`   - Page ${page}: ${items.length} items (Total: ${allItems.length})`);
+                console.log(`   ✓ Page ${page}: ${items.length} items after filtering (Total collected: ${allItems.length})`);
                 
                 if (hasMore) {
                     page++;
-                    // Add delay to avoid rate limiting
-                    await new Promise(resolve => setTimeout(resolve, delayMs));
+                    // Progressive delay - longer waits as we fetch more pages
+                    const progressiveDelay = delayMs + (Math.floor(page / 10) * 100);
+                    await new Promise(resolve => setTimeout(resolve, progressiveDelay));
                 } else {
                     console.log(`✅ Completed: ${allItems.length} total items fetched`);
                 }
@@ -646,6 +707,7 @@ const fetchAllZohoItems = async (zohoHeaders, options = {}) => {
             }
         } catch (error) {
             console.error(`❌ Failed to fetch page ${page}:`, error.message);
+            
             // If we've already fetched some items, return what we have
             if (allItems.length > 0) {
                 console.log(`⚠️  Partial success: Returning ${allItems.length} items`);
@@ -655,9 +717,12 @@ const fetchAllZohoItems = async (zohoHeaders, options = {}) => {
         }
     }
     
-    if (page > maxPages) {
+    if (page > maxPages && hasMore) {
         console.log(`⚠️  Reached max pages limit (${maxPages}). There may be more items.`);
+        console.log(`   To fetch more, increase maxPages parameter.`);
     }
+    
+    console.log(`📊 Final count: ${allItems.length} active items`);
     
     return allItems;
 };
@@ -669,6 +734,8 @@ app.get('/api/zoho/items', async (req, res) => {
         const fetchAll = req.query.fetchAll === 'true';
         const page = req.query.page || 1;
         const per_page = req.query.per_page || 200;
+        const filterInactive = req.query.filterInactive !== 'false'; // Default true
+        const manufacturer = req.query.manufacturer || null;
         
         const zohoHeaders = await getZohoHeaders();
         
@@ -676,8 +743,10 @@ app.get('/api/zoho/items', async (req, res) => {
             // Fetch all items with pagination
             console.log('📥 Request to fetch ALL items from Zoho');
             const allItems = await fetchAllZohoItems(zohoHeaders, {
-                maxPages: parseInt(req.query.maxPages) || 50,
-                delayMs: parseInt(req.query.delayMs) || 200
+                maxPages: parseInt(req.query.maxPages) || 100,
+                delayMs: parseInt(req.query.delayMs) || 300,
+                filterInactive: filterInactive,
+                manufacturer: manufacturer
             });
             
             res.json({
@@ -685,6 +754,10 @@ app.get('/api/zoho/items', async (req, res) => {
                 items: allItems,
                 total: allItems.length,
                 fetchedAll: true,
+                filters: {
+                    excludedInactive: filterInactive,
+                    manufacturer: manufacturer
+                },
                 page_context: {
                     page: 1,
                     per_page: allItems.length,
@@ -694,22 +767,63 @@ app.get('/api/zoho/items', async (req, res) => {
             });
         } else {
             // Single page request (existing behavior)
+            const filters = [];
+            
+            // Build filter for active status
+            if (filterInactive) {
+                filters.push('Status.StartsWith(Active)');
+            }
+            
+            const params = {
+                page: page,
+                per_page: per_page
+            };
+            
+            // Add filter string if we have filters
+            if (filters.length > 0) {
+                params.filter_by = filters.join(' and ');
+            }
+            
+            console.log('📥 Fetching Zoho items with params:', params);
+            
             const response = await axios.get(
                 `${ZOHO_BASE_URL}/items`,
                 {
                     headers: zohoHeaders,
-                    params: {
-                        page: page,
-                        per_page: per_page
-                    }
+                    params: params
                 }
             );
 
             if (response.data.code === 0) {
+                let items = response.data.items;
+                
+                // Double-check status filter on our side
+                if (filterInactive) {
+                    const beforeCount = items.length;
+                    items = items.filter(item => 
+                        item.status && item.status.toLowerCase() === 'active'
+                    );
+                    if (beforeCount !== items.length) {
+                        console.log(`Filtered out ${beforeCount - items.length} inactive items`);
+                    }
+                }
+                
+                // Apply manufacturer filter if specified
+                if (manufacturer) {
+                    items = items.filter(item => 
+                        item.manufacturer?.toLowerCase() === manufacturer.toLowerCase() ||
+                        item.brand?.toLowerCase() === manufacturer.toLowerCase()
+                    );
+                }
+                
                 res.json({
                     success: true,
-                    items: response.data.items,
-                    page_context: response.data.page_context
+                    items: items,
+                    page_context: response.data.page_context,
+                    filters: {
+                        excludedInactive: filterInactive,
+                        manufacturer: manufacturer
+                    }
                 });
             } else {
                 res.status(400).json({
@@ -1239,6 +1353,92 @@ app.post('/api/workflow/process-for-faire', async (req, res) => {
             nextSteps: {
                 uploadToFaire: `/api/bulk/upload`,
                 viewImages: `/processed-images/${timestamp}`
+            }
+        });
+        
+    } catch (error) {
+        if (error.message.includes('No Zoho access token')) {
+            return res.status(401).json({
+                success: false,
+                message: 'Please authenticate with Zoho first',
+                auth_url: '/auth/zoho'
+            });
+        }
+        
+        console.error('Workflow error:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Workflow failed',
+            error: error.message
+        });
+    }
+});
+
+// Integrated workflow: Fetch all from Zoho (Simple version without Firebase)
+app.post('/api/workflow/complete-sync', async (req, res) => {
+    try {
+        const { 
+            fetchAllItems = true,
+            matchImages = false, // Disabled until Firebase is added
+            processImages = false,
+            options = {} 
+        } = req.body;
+        
+        const workflow = {
+            started: new Date().toISOString(),
+            steps: []
+        };
+        
+        // Step 1: Fetch all items from Zoho
+        let zohoItems = [];
+        if (fetchAllItems) {
+            console.log('\n📥 Step 1: Fetching all items from Zoho...');
+            const zohoHeaders = await getZohoHeaders();
+            
+            zohoItems = await fetchAllZohoItems(zohoHeaders, {
+                maxPages: options.maxPages || 100,
+                delayMs: options.delayMs || 300,
+                filterInactive: options.filterInactive !== false,
+                manufacturer: options.manufacturer || null
+            });
+            
+            workflow.steps.push({
+                step: 'fetch_zoho_items',
+                success: true,
+                itemCount: zohoItems.length
+            });
+        }
+        
+        // Step 2: Placeholder for image matching
+        if (matchImages) {
+            console.log('\n⚠️  Image matching requested but Firebase not configured yet');
+            workflow.steps.push({
+                step: 'match_firebase_images',
+                success: false,
+                error: 'Firebase integration pending',
+                matched: 0,
+                notMatched: zohoItems.length
+            });
+        }
+        
+        workflow.completed = new Date().toISOString();
+        workflow.duration = Date.now() - new Date(workflow.started).getTime();
+        
+        res.json({
+            success: true,
+            workflow: workflow,
+            summary: {
+                zohoItems: zohoItems.length,
+                matchedImages: 0,
+                unmatchedImages: zohoItems.length
+            },
+            data: {
+                items: zohoItems.map(item => ({
+                    product: item,
+                    matched: false,
+                    images: [],
+                    error: 'Firebase not configured'
+                }))
             }
         });
         
