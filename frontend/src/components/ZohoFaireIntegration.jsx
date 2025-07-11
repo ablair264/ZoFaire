@@ -155,18 +155,26 @@ function SlideTransition(props) {
 const normalizeBrandName = (brand) => {
   if (!brand) return 'unknown';
   
+  // Convert to string if it's not already
+  const brandStr = String(brand).trim();
+  
+  // Early return for empty string after trimming
+  if (!brandStr) {
+    return 'unknown';
+  }
+  
   // Special case: My Flame Lifestyle → myflame
-  if (typeof brand === 'string' && brand.trim().toLowerCase() === 'my flame lifestyle') {
+  if (brandStr.toLowerCase() === 'my flame lifestyle') {
     return 'myflame';
   }
   
   // Special case: räder → rader
-  if (typeof brand === 'string' && brand.trim().toLowerCase() === 'räder') {
+  if (brandStr.toLowerCase() === 'räder') {
     return 'rader';
   }
   
   // Convert to lowercase and normalize unicode characters
-  let normalized = brand.toLowerCase()
+  let normalized = brandStr.toLowerCase()
     .normalize('NFD') // Decompose accented characters
     .replace(/[\u0300-\u036f]/g, '') // Remove diacritical marks
     .replace(/ä/g, 'a')
@@ -188,14 +196,15 @@ const BrandAvatar = ({ brand, size = 24 }) => {
   const [imageError, setImageError] = useState(false);
   
   const brandName = brand || 'Unknown';
-  const brandLower = brandName.toLowerCase().replace(/\s+/g, '');
+  const brandLower = String(brandName).toLowerCase().replace(/\s+/g, '');
   const logoPath = `/logos/${brandLower}.png`;
   
   // Generate color based on brand name
   const stringToColor = (string) => {
+    const str = String(string || '');
     let hash = 0;
-    for (let i = 0; i < string.length; i += 1) {
-      hash = string.charCodeAt(i) + ((hash << 5) - hash);
+    for (let i = 0; i < str.length; i += 1) {
+      hash = str.charCodeAt(i) + ((hash << 5) - hash);
     }
     let color = '#';
     for (let i = 0; i < 3; i += 1) {
@@ -206,7 +215,8 @@ const BrandAvatar = ({ brand, size = 24 }) => {
   };
   
   const getInitials = (name) => {
-    return name
+    const nameStr = String(name || '');
+    return nameStr
       .split(' ')
       .map(word => word[0])
       .join('')
@@ -395,7 +405,11 @@ const ZohoFaireIntegration = () => {
       // Convert to array of objects sorted by original name
       const uniqueManufacturers = Array.from(manufacturerMap.entries())
         .map(([normalized, original]) => ({ normalized, original }))
-        .sort((a, b) => (a.original || '').toLowerCase().localeCompare((b.original || '').toLowerCase()));
+        .sort((a, b) => {
+          const aStr = String(a.original || '');
+          const bStr = String(b.original || '');
+          return aStr.toLowerCase().localeCompare(bStr.toLowerCase());
+        });
       
       setManufacturers(uniqueManufacturers);
     }
@@ -756,10 +770,13 @@ const ZohoFaireIntegration = () => {
   const filteredItems = useMemo(() => {
     // Note: Filtering by searchTerm is done on current page data.
     // Full filtering should ideally happen via backend search_text param.
-    return zohoItems.filter(item =>
-      (item.name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (item.sku || '').toLowerCase().includes(searchTerm.toLowerCase())
-    );
+    return zohoItems.filter(item => {
+      const itemName = String(item.name || '');
+      const itemSku = String(item.sku || '');
+      const searchLower = String(searchTerm || '').toLowerCase();
+      return itemName.toLowerCase().includes(searchLower) ||
+             itemSku.toLowerCase().includes(searchLower);
+    });
   }, [zohoItems, searchTerm]);
 
 
@@ -1609,7 +1626,11 @@ const ZohoFaireIntegration = () => {
                   // Convert to sorted array
                   return Array.from(brandSet.entries())
                     .map(([normalized, original]) => ({ normalized, original }))
-                    .sort((a, b) => a.original.toLowerCase().localeCompare(b.original.toLowerCase()))
+                    .sort((a, b) => {
+                      const aStr = String(a.original || '');
+                      const bStr = String(b.original || '');
+                      return aStr.toLowerCase().localeCompare(bStr.toLowerCase());
+                    })
                     .map(brand => (
                       <MenuItem key={brand.original} value={brand.original}>
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>

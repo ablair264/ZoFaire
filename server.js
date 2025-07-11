@@ -30,8 +30,16 @@ const PORT = process.env.PORT || 3001;
 const normalizeBrandName = (brand) => {
     if (!brand) return 'unknown';
     
+    // Convert to string if it's not already
+    const brandStr = String(brand).trim();
+    
+    // Early return for empty string after trimming
+    if (!brandStr) {
+        return 'unknown';
+    }
+    
     // Convert to lowercase and normalize unicode characters
-    let normalized = brand.toLowerCase()
+    let normalized = brandStr.toLowerCase()
         .normalize('NFD') // Decompose accented characters
         .replace(/[\u0300-\u036f]/g, '') // Remove diacritical marks
         .replace(/ä/g, 'a')
@@ -347,7 +355,7 @@ app.post('/api/workflow/complete-sync', async (req, res) => {
         } while (true);
         // Filter out products with brand/manufacturer 'service' or 'goods'
         allZohoItems = allZohoItems.filter(item => {
-            const brand = (item.manufacturer || item.brand || '').toLowerCase();
+            const brand = String(item.manufacturer || item.brand || '').toLowerCase();
             return brand !== 'service' && brand !== 'goods';
         });
         zohoItemsFetched = allZohoItems.length;

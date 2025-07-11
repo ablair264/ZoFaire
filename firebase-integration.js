@@ -4,17 +4,26 @@ const admin = require('firebase-admin');
 // Normalize brand names for Firebase paths (remove special characters, umlauts, etc.)
 function normalizeBrandName(brand) {
   if (!brand) return 'unknown';
+  
+  // Convert to string if it's not already
+  const brandStr = String(brand).trim();
+  
+  // Early return for empty string after trimming
+  if (!brandStr) {
+    return 'unknown';
+  }
+  
   // Special case: My Flame Lifestyle → myflame
-  if (typeof brand === 'string' && brand.trim().toLowerCase() === 'my flame lifestyle') {
+  if (brandStr.toLowerCase() === 'my flame lifestyle') {
     return 'myflame';
   }
   // Special case: räder → rader
-  if (typeof brand === 'string' && brand.trim().toLowerCase() === 'räder') {
+  if (brandStr.toLowerCase() === 'räder') {
     return 'rader';
   }
   
   // Convert to lowercase and normalize unicode characters
-  let normalized = brand.toLowerCase()
+  let normalized = brandStr.toLowerCase()
     .normalize('NFD') // Decompose accented characters
     .replace(/[\u0300-\u036f]/g, '') // Remove diacritical marks
     .replace(/ä/g, 'a')
@@ -106,7 +115,7 @@ async function getProductImages(manufacturer, sku) {
 
     const bucket = storage.bucket();
     const normalizedManufacturer = normalizeBrandName(manufacturer);
-    const prefix = `brand-images/${normalizedManufacturer}/${sku.toLowerCase()}`;
+    const prefix = `brand-images/${normalizedManufacturer}/${String(sku || '').toLowerCase()}`;
     
     console.log(`🔍 Searching for images with prefix: ${prefix}`);
     
@@ -116,7 +125,7 @@ async function getProductImages(manufacturer, sku) {
     // Filter for webp images matching our pattern
     const imageFiles = files.filter(file => {
       const fileName = file.name.split('/').pop();
-      const pattern = new RegExp(`^${sku.toLowerCase()}_\\d+(_\\d+x\\d+)?\\.webp$`);
+      const pattern = new RegExp(`^${String(sku || '').toLowerCase()}_\\d+(_\\d+x\\d+)?\\.webp$`);
       return pattern.test(fileName);
     });
     
@@ -216,7 +225,7 @@ async function getAvailableBrands() {
       prefixes.prefixes.forEach(prefix => {
         const brand = prefix.replace('brand-images/', '').replace('/', '');
         if (brand) {
-          brands.add(brand.toLowerCase());
+          brands.add(String(brand).toLowerCase());
         }
       });
     }
