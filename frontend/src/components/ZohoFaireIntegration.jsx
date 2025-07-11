@@ -68,6 +68,7 @@ import {
 } from '@mui/icons-material';
 import ItemDetail from './ItemDetail';
 import ProgressLoader from './ProgressLoader';
+import { firebaseCache } from '../utils/firebaseCache';
 
 const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:3001/api';
 
@@ -376,8 +377,23 @@ const ZohoFaireIntegration = () => {
   };
 
   // Fetch Items from items_data collection
-  const fetchItems = useCallback(async (showLoading = true) => {
+  const fetchItems = useCallback(async (showLoading = true, forceRefresh = false) => {
     if (showLoading) setLoading(true);
+    
+    // Create cache key based on current filters
+    const cacheKey = `items_${page}_${rowsPerPage}_${searchTerm}_${filterInactive}`;
+    
+    // Try to get from cache first (unless force refresh)
+    if (!forceRefresh && !searchTerm) { // Don't cache search results
+      const cachedData = firebaseCache.get(cacheKey);
+      if (cachedData) {
+        setZohoItems(cachedData.items);
+        setZohoItemsFetchedCount(cachedData.total);
+        if (showLoading) setLoading(false);
+        return;
+      }
+    }
+    
     try {
       const params = new URLSearchParams({
         page: page + 1,
@@ -403,6 +419,15 @@ const ZohoFaireIntegration = () => {
       
       // Use total count from response
       setZohoItemsFetchedCount(data.total || cleanedItems.length);
+      
+      // Cache the results (only for non-search queries)
+      if (!searchTerm) {
+        firebaseCache.set(cacheKey, {
+          items: cleanedItems,
+          total: data.total || cleanedItems.length
+        }, 15 * 60 * 1000); // Cache for 15 minutes
+      }
+      
       showSnackbar('Items fetched successfully!', 'success');
     } catch (error) {
       console.error('Error fetching items:', error);
@@ -1115,10 +1140,23 @@ const ZohoFaireIntegration = () => {
               <Button
                 variant="outlined"
                 startIcon={<RefreshIcon />}
-                onClick={fetchItems}
+                onClick={() => fetchItems(true, true)} // Force refresh
                 disabled={loading}
               >
                 Refresh
+              </Button>
+              
+              <Button
+                variant="outlined"
+                startIcon={<DownloadIcon />}
+                onClick={() => {
+                  firebaseCache.clearAll();
+                  showSnackbar('Cache cleared!', 'info');
+                }}
+                disabled={loading}
+                title="Clear all cached data"
+              >
+                Clear Cache
               </Button>
               
               <FormControl size="small" sx={{ minWidth: 180, mr: 2 }}>
