@@ -40,7 +40,7 @@ if (missingEnvVars.length > 0) {
 }
 
 // Zoho OAuth configuration
-const ZOHO_OAUTH_BASE = 'https://accounts.zoho.com/oauth/v2';
+const ZOHO_OAUTH_BASE = process.env.ZOHO_REGION === 'eu' ? 'https://accounts.zoho.eu/oauth/v2' : 'https://accounts.zoho.com/oauth/v2';
 const ZOHO_BASE_URL = process.env.ZOHO_BASE_URL || 'https://www.zohoapis.com/inventory/v1';
 const REDIRECT_URI = `${process.env.BASE_URL || 'https://zofaire.onrender.com'}/auth/zoho/callback`;
 const ZOHO_SCOPES = 'ZohoInventory.FullAccess.all';
@@ -183,27 +183,36 @@ app.get('/auth/zoho/callback', async (req, res) => {
         tokenStorage.zoho_expires_at = Date.now() + (data.expires_in * 1000);
         
         console.log('Zoho OAuth successful. Tokens stored.');
+        console.log('Access token received:', data.access_token ? 'Yes' : 'No');
+        console.log('Refresh token received:', data.refresh_token ? 'Yes' : 'No');
         
         res.send(`
             <html>
                 <body style="font-family: Arial, sans-serif; padding: 40px; text-align: center;">
                     <h2 style="color: #4CAF50;">✅ Authentication Successful!</h2>
                     <p>Zoho Inventory access has been granted.</p>
-                    <p><strong>Access Token:</strong> ${data.access_token ? data.access_token.substring(0, 20) + '...' : 'Token received'}</p>
-                    <p><strong>Expires in:</strong> ${data.expires_in ? Math.floor(data.expires_in / 3600) + ' hours' : 'Standard duration'}</p>
+                    <p><strong>Access Token:</strong> ${data.access_token ? data.access_token.substring(0, 30) + '...' : 'Not received'}</p>
+                    <p><strong>Refresh Token:</strong> ${data.refresh_token ? data.refresh_token.substring(0, 30) + '...' : 'Not received'}</p>
+                    <p><strong>Expires in:</strong> ${data.expires_in ? Math.floor(data.expires_in / 3600) + ' hours' : 'Unknown'}</p>
                     <br>
                     <a href="/" style="background: #2196F3; color: white; padding: 12px 24px; text-decoration: none; border-radius: 4px; margin-right: 10px;">Go to Dashboard</a>
                     <a href="/auth/status" style="background: #4CAF50; color: white; padding: 12px 24px; text-decoration: none; border-radius: 4px;">Check Status</a>
                     
                     <div style="margin-top: 30px; padding: 20px; background: #f5f5f5; border-radius: 8px; text-align: left;">
-                        <h3>⚠️ Important: Save These Environment Variables</h3>
-                        <p>Add these to your Render environment variables for persistent authentication:</p>
-                        <code style="display: block; background: white; padding: 10px; margin: 10px 0; border-radius: 4px;">
-                            ZOHO_ACCESS_TOKEN=${data.access_token || 'token_received'}<br>
-                            ZOHO_REFRESH_TOKEN=${data.refresh_token || 'refresh_token_received'}<br>
+                        <h3>⚠️ Important: Add These to Render Environment Variables</h3>
+                        <p>Copy and add these exact values to your Render dashboard:</p>
+                        <code style="display: block; background: white; padding: 15px; margin: 10px 0; border-radius: 4px; word-break: break-all; font-size: 12px;">
+                            ZOHO_ACCESS_TOKEN=${data.access_token || 'TOKEN_NOT_RECEIVED'}<br><br>
+                            ZOHO_REFRESH_TOKEN=${data.refresh_token || 'REFRESH_TOKEN_NOT_RECEIVED'}<br><br>
                             ZOHO_BASE_URL=https://www.zohoapis.eu/inventory/v1
                         </code>
-                        <p><small>This will prevent re-authentication on server restarts.</small></p>
+                        <p><strong>Steps:</strong></p>
+                        <ol>
+                            <li>Go to Render Dashboard → Your Service → Environment</li>
+                            <li>Add the above environment variables</li>
+                            <li>Redeploy your service</li>
+                            <li>Refresh your frontend to see connected status</li>
+                        </ol>
                     </div>
                 </body>
             </html>
