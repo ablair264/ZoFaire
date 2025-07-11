@@ -24,7 +24,11 @@ import {
   List,
   ListItem,
   ListItemText,
-  ListItemIcon
+  ListItemIcon,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem
 } from '@mui/material';
 import {
   Image as ImageIcon,
@@ -34,12 +38,13 @@ import {
   CheckCircle as CheckCircleIcon,
   Warning as WarningIcon,
   AddPhotoAlternate as AddPhotoIcon,
-  CloudSync as CloudSyncIcon
+  CloudSync as CloudSyncIcon,
+  FilterList as FilterListIcon
 } from '@mui/icons-material';
 
 const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'https://zofaire.onrender.com/api';
 
-const ImageManagement = ({ zohoItems, onAlert }) => {
+const ImageManagement = ({ zohoItems, onAlert, onRefreshItems }) => {
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [imageDialog, setImageDialog] = useState(false);
   const [uploadDialog, setUploadDialog] = useState(false);
@@ -59,11 +64,29 @@ const ImageManagement = ({ zohoItems, onAlert }) => {
   const [selectedFiles, setSelectedFiles] = useState([]);
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
+  
+  // New states for filtering and batch processing
+  const [selectedManufacturer, setSelectedManufacturer] = useState('all');
+  const [manufacturers, setManufacturers] = useState([]);
+  const [matchProgress, setMatchProgress] = useState({ current: 0, total: 0 });
+  const [isMatching, setIsMatching] = useState(false);
 
   // Load Firebase brands on mount
   useEffect(() => {
     loadFirebaseBrands();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Extract unique manufacturers from items
+  useEffect(() => {
+    if (zohoItems && zohoItems.length > 0) {
+      const uniqueManufacturers = [...new Set(
+        zohoItems
+          .map(item => item.manufacturer || item.brand || 'Unknown')
+          .filter(m => m && m !== 'Unknown')
+      )].sort();
+      setManufacturers(uniqueManufacturers);
+    }
+  }, [zohoItems]);
 
   // Load Firebase brands
   const loadFirebaseBrands = async () => {
@@ -81,50 +104,92 @@ const ImageManagement = ({ zohoItems, onAlert }) => {
     }
   };
 
-  // Match all products with Firebase images
+  // Match all products with Firebase images (with batching)
   const matchAllImages = async () => {
-    if (zohoItems.length === 0) {
-      onAlert('warning', 'No products loaded');
+    const itemsToMatch = selectedManufacturer === 'all' 
+      ? zohoItems 
+      : zohoItems.filter(item => 
+          (item.manufacturer || item.brand || '').toLowerCase() === selectedManufacturer.toLowerCase()
+        );
+
+    if (itemsToMatch.length === 0) {
+      onAlert('warning', 'No products to match');
       return;
     }
 
-    setLoading(true);
+    setIsMatching(true);
+    setMatchProgress({ current: 0, total: itemsToMatch.length });
+    
+    const BATCH_SIZE = 50; // Process 50 items at a time
+    const batches = Math.ceil(itemsToMatch.length / BATCH_SIZE);
+    
+    const allResults = {
+      matched: 0,
+      notMatched: 0,
+      errors: 0,
+      products: []
+    };
+
     try {
-      const response = await fetch(`${API_BASE_URL}/firebase/match-images`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ items: zohoItems })
-      });
+      for (let i = 0; i < batches; i++) {
+        const batchStart = i * BATCH_SIZE;
+        const batchEnd = Math.min((i + 1) * BATCH_SIZE, itemsToMatch.length);
+        const batch = itemsToMatch.slice(batchStart, batchEnd);
+        
+        setMatchProgress({ current: batchStart, total: itemsToMatch.length });
+        
+        const response = await fetch(`${API_BASE_URL}/firebase/match-images`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ items: batch })
+        });
 
-      if (response.ok) {
-        const data = await response.json();
-        if (data.success) {
-          // Store image data for each product
-          const imageMap = {};
-          data.products.forEach(item => {
-            imageMap[item.product.sku] = {
-              matched: item.matched,
-              images: item.images,
-              error: item.error
-            };
-          });
-          setProductImages(imageMap);
-
-          // Update stats
-          setImageStats({
-            total: data.products.length,
-            matched: data.matched,
-            missing: data.notMatched
-          });
-
-          onAlert('success', `Image matching complete: ${data.matched} matched, ${data.notMatched} missing`);
+        if (response.ok) {
+          const data = await response.json();
+          if (data.success) {
+            // Accumulate results
+            allResults.matched += data.matched;
+            allResults.notMatched += data.notMatched;
+            allResults.errors += data.errors || 0;
+            allResults.products.push(...data.products);
+            
+            // Update product images map
+            data.products.forEach(item => {
+              setProductImages(prev => ({
+                ...prev,
+                [item.product.sku]: {
+                  matched: item.matched,
+                  images: item.images,
+                  error: item.error
+                }
+              }));
+            });
+          }
+        }
+        
+        // Small delay between batches to avoid overwhelming the server
+        if (i < batches - 1) {
+          await new Promise(resolve => setTimeout(resolve, 100));
         }
       }
+
+      // Update stats
+      setImageStats({
+        total: allResults.products.length,
+        matched: allResults.matched,
+        missing: allResults.notMatched
+      });
+
+      onAlert('success', 
+        `Image matching complete: ${allResults.matched} matched, ${allResults.notMatched} missing`
+      );
+      
     } catch (error) {
       console.error('Error matching images:', error);
       onAlert('error', 'Failed to match images with Firebase');
     } finally {
-      setLoading(false);
+      setIsMatching(false);
+      setMatchProgress({ current: 0, total: 0 });
     }
   };
 
@@ -219,36 +284,7 @@ const ImageManagement = ({ zohoItems, onAlert }) => {
     }
   };
 
-  // Process images from Zoho URLs (keeping for future use)
-  // const processZohoImages = async (products) => {
-  //   setLoading(true);
-  //   try {
-  //     const response = await fetch(`${API_BASE_URL}/images/process-and-upload`, {
-  //       method: 'POST',
-  //       headers: { 'Content-Type': 'application/json' },
-  //       body: JSON.stringify({
-  //         items: products,
-  //         options: processOptions
-  //       })
-  //     });
-
-  //     if (response.ok) {
-  //       const data = await response.json();
-  //       if (data.success) {
-  //         onAlert('success', `Processed ${data.results.uploaded} images successfully`);
-  //         // Refresh image status
-  //         await matchAllImages();
-  //       }
-  //     }
-  //   } catch (error) {
-  //     console.error('Error processing Zoho images:', error);
-  //     onAlert('error', 'Failed to process images');
-  //   } finally {
-  //     setLoading(false);
-  //   }
-  // };
-
-  // Complete sync workflow
+  // Complete sync workflow with filters
   const runCompleteSync = async () => {
     setLoading(true);
     try {
@@ -263,7 +299,9 @@ const ImageManagement = ({ zohoItems, onAlert }) => {
           processImages: false,
           options: {
             maxPages: 100,
-            delayMs: 300
+            delayMs: 300,
+            filterInactive: true,
+            manufacturer: selectedManufacturer === 'all' ? null : selectedManufacturer
           }
         })
       });
@@ -289,6 +327,11 @@ const ImageManagement = ({ zohoItems, onAlert }) => {
               }
             });
             setProductImages(imageMap);
+          }
+          
+          // Refresh the main items list if we have that function
+          if (onRefreshItems) {
+            onRefreshItems();
           }
         }
       }
@@ -321,6 +364,13 @@ const ImageManagement = ({ zohoItems, onAlert }) => {
     setSelectedFiles(files);
   };
 
+  // Filter products by manufacturer
+  const filteredProducts = selectedManufacturer === 'all' 
+    ? zohoItems 
+    : zohoItems.filter(item => 
+        (item.manufacturer || item.brand || '').toLowerCase() === selectedManufacturer.toLowerCase()
+      );
+
   return (
     <Box>
       {/* Image Statistics Card */}
@@ -332,7 +382,7 @@ const ImageManagement = ({ zohoItems, onAlert }) => {
           
           <Grid container spacing={2} alignItems="center">
             <Grid item xs={12} md={6}>
-              <Box display="flex" gap={2}>
+              <Box display="flex" gap={2} alignItems="center">
                 <Chip 
                   icon={<CheckCircleIcon />}
                   label={`${imageStats.matched} Products with Images`}
@@ -354,14 +404,33 @@ const ImageManagement = ({ zohoItems, onAlert }) => {
             </Grid>
             
             <Grid item xs={12} md={6} textAlign="right">
+              <FormControl size="small" sx={{ minWidth: 150, mr: 1 }}>
+                <InputLabel id="manufacturer-filter-label">
+                  <FilterListIcon sx={{ fontSize: 16, mr: 0.5 }} />
+                  Manufacturer
+                </InputLabel>
+                <Select
+                  labelId="manufacturer-filter-label"
+                  value={selectedManufacturer}
+                  onChange={(e) => setSelectedManufacturer(e.target.value)}
+                  label="Manufacturer"
+                >
+                  <MenuItem value="all">All Manufacturers</MenuItem>
+                  <Divider />
+                  {manufacturers.map(mfr => (
+                    <MenuItem key={mfr} value={mfr}>{mfr}</MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+              
               <Button
                 variant="outlined"
                 startIcon={<RefreshIcon />}
                 onClick={loadFirebaseBrands}
                 sx={{ mr: 1 }}
-                disabled={loading}
+                disabled={loading || isMatching}
               >
-                Refresh Brands
+                Refresh
               </Button>
               
               <Button
@@ -369,7 +438,7 @@ const ImageManagement = ({ zohoItems, onAlert }) => {
                 startIcon={<ImageIcon />}
                 onClick={matchAllImages}
                 sx={{ mr: 1 }}
-                disabled={loading || zohoItems.length === 0}
+                disabled={loading || isMatching || filteredProducts.length === 0}
               >
                 Match Images
               </Button>
@@ -378,25 +447,42 @@ const ImageManagement = ({ zohoItems, onAlert }) => {
                 variant="contained"
                 startIcon={<CloudSyncIcon />}
                 onClick={runCompleteSync}
-                disabled={loading}
+                disabled={loading || isMatching}
               >
                 Complete Sync
               </Button>
             </Grid>
           </Grid>
           
-          {loading && <LinearProgress sx={{ mt: 2 }} />}
+          {(loading || isMatching) && (
+            <Box sx={{ mt: 2 }}>
+              <LinearProgress />
+              {isMatching && matchProgress.total > 0 && (
+                <Typography variant="caption" color="text.secondary" sx={{ mt: 1 }}>
+                  Matching images: {matchProgress.current} / {matchProgress.total}
+                </Typography>
+              )}
+            </Box>
+          )}
         </CardContent>
       </Card>
 
       {/* Products with Image Status */}
       <Paper sx={{ p: 2 }}>
         <Typography variant="h6" gutterBottom>
-          Product Image Status
+          Product Image Status 
+          {selectedManufacturer !== 'all' && (
+            <Chip 
+              label={selectedManufacturer} 
+              size="small" 
+              sx={{ ml: 2 }} 
+              onDelete={() => setSelectedManufacturer('all')}
+            />
+          )}
         </Typography>
         
         <Grid container spacing={2}>
-          {zohoItems.slice(0, 12).map((product) => {
+          {filteredProducts.slice(0, 12).map((product) => {
             const imageStatus = getImageStatus(product);
             
             return (
@@ -411,6 +497,11 @@ const ImageManagement = ({ zohoItems, onAlert }) => {
                         <Typography variant="caption" color="text.secondary">
                           SKU: {product.sku}
                         </Typography>
+                        {product.manufacturer && (
+                          <Typography variant="caption" color="text.secondary" display="block">
+                            {product.manufacturer}
+                          </Typography>
+                        )}
                       </Box>
                       
                       <Box>
@@ -473,10 +564,16 @@ const ImageManagement = ({ zohoItems, onAlert }) => {
           })}
         </Grid>
         
-        {zohoItems.length > 12 && (
+        {filteredProducts.length > 12 && (
           <Typography variant="body2" color="text.secondary" sx={{ mt: 2, textAlign: 'center' }}>
-            Showing first 12 products. Use the main table to see all products.
+            Showing first 12 of {filteredProducts.length} products. Use the main table to see all.
           </Typography>
+        )}
+        
+        {filteredProducts.length === 0 && (
+          <Alert severity="info" sx={{ mt: 2 }}>
+            No products found for the selected manufacturer.
+          </Alert>
         )}
       </Paper>
 
