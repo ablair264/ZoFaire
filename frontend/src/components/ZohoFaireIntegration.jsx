@@ -63,7 +63,8 @@ import {
   FilterList as FilterListIcon,
   Download as DownloadIcon,
   Upload as UploadIcon,
-  Close as CloseIcon
+  Close as CloseIcon,
+  ImageNotSupported as ImageNotSupportedIcon
 } from '@mui/icons-material';
 import ItemDetail from './ItemDetail';
 import ProgressLoader from './ProgressLoader';
@@ -1348,7 +1349,7 @@ const ZohoFaireIntegration = () => {
                                   style={{ width: 32, height: 32, objectFit: 'cover', borderRadius: '50%' }}
                                 />
                               ) : (
-                                <NoImageIcon />
+                                <ImageNotSupportedIcon />
                               )}
                               <Tooltip title="Manage product images">
                                 <IconButton
