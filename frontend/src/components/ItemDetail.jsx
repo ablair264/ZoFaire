@@ -99,6 +99,21 @@ const ItemDetail = ({ open, onClose, item }) => {
 
   if (!item) return null;
 
+  // Debug: Log the item to see what we're working with
+  console.log('ItemDetail received item:', item);
+  
+  // Check for any problematic object fields that might cause rendering issues
+  const problematicFields = ['manufacturer_contact', 'manufacturer_part_number', 'manufacturer_name', 'manufacturer_website'];
+  const hasProblematicFields = problematicFields.some(field => 
+    item[field] && typeof item[field] === 'object'
+  );
+  
+  if (hasProblematicFields) {
+    console.warn('ItemDetail: Item contains problematic object fields:', 
+      problematicFields.filter(field => item[field] && typeof item[field] === 'object')
+    );
+  }
+
   return (
     <Dialog
       open={open}
@@ -121,12 +136,12 @@ const ItemDetail = ({ open, onClose, item }) => {
         pb: 1
       }}>
         <Box>
-          <Typography variant="h5" component="h2" sx={{ fontWeight: 600 }}>
-            {item.name}
-          </Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-            SKU: {item.sku}
-          </Typography>
+                            <Typography variant="h5" component="h2" sx={{ fontWeight: 600 }}>
+                    {typeof item.name === 'string' ? item.name : 'No Name'}
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+                    SKU: {typeof item.sku === 'string' ? item.sku : 'No SKU'}
+                  </Typography>
         </Box>
         <IconButton onClick={onClose} size="large">
           <CloseIcon />
@@ -152,7 +167,7 @@ const ItemDetail = ({ open, onClose, item }) => {
                     Description
                   </Typography>
                   <Typography variant="body1" sx={{ mt: 0.5 }}>
-                    {item.description || 'No description available'}
+                    {typeof item.description === 'string' ? item.description : 'No description available'}
                   </Typography>
                 </Box>
 
@@ -164,7 +179,7 @@ const ItemDetail = ({ open, onClose, item }) => {
                       Manufacturer
                     </Typography>
                     <Typography variant="body1" sx={{ fontWeight: 500 }}>
-                      {item.manufacturer || 'N/A'}
+                      {typeof item.manufacturer === 'string' ? item.manufacturer : 'N/A'}
                     </Typography>
                   </Grid>
                   <Grid item xs={6}>
@@ -172,7 +187,7 @@ const ItemDetail = ({ open, onClose, item }) => {
                       Brand
                     </Typography>
                     <Typography variant="body1" sx={{ fontWeight: 500 }}>
-                      {item.brand || 'N/A'}
+                      {typeof item.brand === 'string' ? item.brand : 'N/A'}
                     </Typography>
                   </Grid>
                   <Grid item xs={6}>
@@ -180,8 +195,8 @@ const ItemDetail = ({ open, onClose, item }) => {
                       Status
                     </Typography>
                     <Chip 
-                      label={item.status || 'Unknown'} 
-                      color={item.status === 'active' ? 'success' : 'default'}
+                      label={typeof item.status === 'string' ? item.status : 'Unknown'} 
+                      color={typeof item.status === 'string' && item.status === 'active' ? 'success' : 'default'}
                       size="small"
                       sx={{ mt: 0.5 }}
                     />
@@ -191,7 +206,7 @@ const ItemDetail = ({ open, onClose, item }) => {
                       Product Type
                     </Typography>
                     <Typography variant="body1" sx={{ fontWeight: 500 }}>
-                      {item.product_type || 'N/A'}
+                      {typeof item.product_type === 'string' ? item.product_type : 'N/A'}
                     </Typography>
                   </Grid>
                   <Grid item xs={6}>

@@ -487,6 +487,21 @@ const ZohoFaireIntegration = () => {
   const isSelected = (itemId) => selectedItems.has(itemId);
 
   const handleItemClick = (item) => {
+    // Debug: Check if item contains any objects that shouldn't be rendered
+    console.log('Item being passed to ItemDetail:', item);
+    
+    // Check for any nested objects that might cause rendering issues
+    const problematicFields = ['manufacturer_contact', 'manufacturer_part_number', 'manufacturer_name', 'manufacturer_website'];
+    const hasProblematicFields = problematicFields.some(field => 
+      item[field] && typeof item[field] === 'object'
+    );
+    
+    if (hasProblematicFields) {
+      console.warn('Item contains problematic object fields:', 
+        problematicFields.filter(field => item[field] && typeof item[field] === 'object')
+      );
+    }
+    
     setSelectedItem(item);
     setDetailDialogOpen(true);
   };
@@ -1241,28 +1256,28 @@ const ZohoFaireIntegration = () => {
                           </TableCell>
                           <TableCell>
                             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                              <BrandAvatar brand={item.brand || item.manufacturer} size={32} />
+                              <BrandAvatar brand={typeof (item.brand || item.manufacturer) === 'string' ? (item.brand || item.manufacturer) : 'Unknown'} size={32} />
                               <Box>
                                 <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                                  {item.name || 'No Name'}
+                                  {typeof item.name === 'string' ? item.name : 'No Name'}
                                 </Typography>
                                 <Tooltip title="View details">
                                   <VisibilityIcon fontSize="small" color="action" />
                                 </Tooltip>
                                 <Typography variant="caption" color="text.secondary">
-                                  {item.brand || item.manufacturer || 'No Brand'}
+                                  {typeof (item.brand || item.manufacturer) === 'string' ? (item.brand || item.manufacturer) : 'No Brand'}
                                 </Typography>
                               </Box>
                             </Box>
                           </TableCell>
                           <TableCell>
                             <Typography variant="body2" sx={{ fontFamily: 'monospace' }}>
-                              {item.sku || 'No SKU'}
+                              {typeof item.sku === 'string' ? item.sku : 'No SKU'}
                             </Typography>
                           </TableCell>
                           <TableCell>
                             <Chip
-                              label={item.status || 'Unknown'}
+                              label={typeof item.status === 'string' ? item.status : 'Unknown'}
                               size="small"
                               sx={{
                                 fontWeight: 600,

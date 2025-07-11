@@ -529,8 +529,8 @@ app.get('/api/items', async (req, res) => {
                     }
                 }
 
-                // Transform to match the expected format
-                items.push({
+                // Transform to match the expected format and filter out problematic object fields
+                const cleanItem = {
                     item_id: itemData.item_id || doc.id,
                     sku: itemData.sku,
                     name: itemData.name || itemData.item_name,
@@ -546,8 +546,18 @@ app.get('/api/items', async (req, res) => {
                     last_modified_time: itemData.last_modified_time,
                     product_type: itemData.product_type,
                     item_type: itemData.item_type,
-                    // Add any other fields you need
+                };
+                
+                // Filter out any problematic object fields that might cause React rendering issues
+                const problematicFields = ['manufacturer_contact', 'manufacturer_part_number', 'manufacturer_name', 'manufacturer_website'];
+                problematicFields.forEach(field => {
+                    if (itemData[field] && typeof itemData[field] === 'object') {
+                        console.warn(`Filtering out problematic object field: ${field} for item ${cleanItem.sku}`);
+                        delete cleanItem[field];
+                    }
                 });
+                
+                items.push(cleanItem);
             } catch (itemError) {
                 console.error(`Error processing item ${doc.id}:`, itemError);
                 skippedItems++;
