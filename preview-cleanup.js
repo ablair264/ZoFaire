@@ -34,8 +34,8 @@ async function previewCleanup() {
       const docId = doc.id;
       const data = doc.data();
       
-      // Check if document ID starts with "ITEM_"
-      if (docId.startsWith('310')) {
+      // Check if document has _syncSource as "zoho_api"
+      if (data._syncSource === 'zoho_api') {
         toDelete.push({
           id: docId,
           sku: data.sku || 'No SKU',
@@ -64,7 +64,7 @@ async function previewCleanup() {
         console.log(`... and ${toDelete.length - 10} more documents`);
       }
     } else {
-      console.log('No documents found with IDs starting with "ITEM_"');
+      console.log('No documents found with _syncSource = "zoho_api"');
     }
     
     console.log('\n=== DOCUMENTS TO KEEP ===');

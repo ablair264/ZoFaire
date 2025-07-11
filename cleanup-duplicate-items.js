@@ -29,9 +29,10 @@ async function cleanupDuplicateItems() {
     // Process each document
     for (const doc of snapshot.docs) {
       const docId = doc.id;
+      const data = doc.data();
       
-      // Check if document ID starts with "ITEM_"
-      if (docId.startsWith('310')) {
+      // Check if document has _syncSource as "zoho_api"
+      if (data._syncSource === 'zoho_api') {
         try {
           await doc.ref.delete();
           console.log(`Deleted document: ${docId}`);
