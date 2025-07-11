@@ -73,8 +73,22 @@ const ImageManagement = ({ zohoItems, onAlert, onRefreshItems }) => {
 
   // Load Firebase brands on mount
   useEffect(() => {
-    loadFirebaseBrands();
+    checkFirebaseAndLoad();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  
+  // Check if Firebase is available before loading
+  const checkFirebaseAndLoad = async () => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/firebase/status`);
+      if (response.ok) {
+        loadFirebaseBrands();
+      } else {
+        console.log('Firebase endpoints not available yet');
+      }
+    } catch (error) {
+      console.log('Firebase not configured:', error);
+    }
+  };
 
   // Extract unique manufacturers from items
   useEffect(() => {
@@ -310,9 +324,21 @@ const ImageManagement = ({ zohoItems, onAlert, onRefreshItems }) => {
         const data = await response.json();
         if (data.success) {
           const summary = data.summary;
-          onAlert('success', 
-            `Sync complete: ${summary.zohoItems} items, ${summary.matchedImages} with images, ${summary.unmatchedImages} missing`
+          
+          // Check if Firebase was configured
+          const firebaseConfigured = data.workflow.steps.some(step => 
+            step.step === 'match_firebase_images' && step.success
           );
+          
+          if (!firebaseConfigured) {
+            onAlert('warning', 
+              `Fetched ${summary.zohoItems} items from Zoho. Firebase image matching is not configured yet.`
+            );
+          } else {
+            onAlert('success', 
+              `Sync complete: ${summary.zohoItems} items, ${summary.matchedImages} with images, ${summary.unmatchedImages} missing`
+            );
+          }
           
           // Update local state with the results
           if (data.data && data.data.items) {

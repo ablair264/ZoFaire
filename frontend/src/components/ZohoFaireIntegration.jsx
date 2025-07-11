@@ -24,7 +24,12 @@ import {
   Tooltip,
   LinearProgress,
   Tabs,
-  Tab
+  Tab,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem,
+  Divider
 } from '@mui/material';
 import {
   Refresh as RefreshIcon,
@@ -33,7 +38,8 @@ import {
   CloudUpload as CloudUploadIcon,
   Schedule as ScheduleIcon,
   CheckCircle as CheckCircleIcon,
-  Image as ImageIcon
+  Image as ImageIcon,
+  FilterList as FilterListIcon
 } from '@mui/icons-material';
 import ImageManagement from './ImageManagement';
 
@@ -59,6 +65,11 @@ const ZohoFaireIntegration = () => {
   const [authStatus, setAuthStatus] = useState(null);
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
   const [activeTab, setActiveTab] = useState(0);
+  
+  // New filter states
+  const [selectedManufacturer, setSelectedManufacturer] = useState('all');
+  const [manufacturers, setManufacturers] = useState([]);
+  const [showInactive, setShowInactive] = useState(false);
 
   // Check authentication status
   const checkAuthStatus = useCallback(async () => {
@@ -78,14 +89,23 @@ const ZohoFaireIntegration = () => {
     }
   }, []);
 
-  // Fetch data from Zoho Inventory API
+  // Fetch data from Zoho Inventory API with filters
   const fetchZohoItems = useCallback(async (fetchAll = false) => {
     setLoading(true);
     try {
-      // Build URL with fetchAll parameter if needed
-      let url = `${API_BASE_URL}/zoho/items`;
+      // Build URL with parameters
+      const params = new URLSearchParams();
       if (fetchAll) {
-        url += '?fetchAll=true';
+        params.append('fetchAll', 'true');
+      }
+      params.append('filterInactive', (!showInactive).toString());
+      if (selectedManufacturer !== 'all') {
+        params.append('manufacturer', selectedManufacturer);
+      }
+      
+      let url = `${API_BASE_URL}/zoho/items?${params.toString()}`;
+      
+      if (fetchAll) {
         addAlert('info', 'Fetching all items from Zoho. This may take a few moments...');
       }
       
@@ -107,36 +127,46 @@ const ZohoFaireIntegration = () => {
       
       if (data.success) {
         // Transform Zoho API response to our format
-        const items = data.items.map(item => ({
-          item_id: item.item_id,
-          name: item.name,
-          description: item.description || '',
-          rate: parseFloat(item.rate) || 0,
-          sku: item.sku || '',
-          status: item.status,
-          category_name: item.category_name || 'Uncategorized',
-          stock_on_hand: parseInt(item.stock_on_hand) || 0,
-          created_time: item.created_time,
-          item_type: item.item_type,
-          unit: item.unit,
-          brand: item.brand,
-          manufacturer: item.manufacturer,
-          uploaded_to_faire: false // We'll check this separately
-        }));
+        const items = data.items
+          .filter(item => showInactive || item.status === 'active') // Client-side filter as backup
+          .map(item => ({
+            item_id: item.item_id,
+            name: item.name,
+            description: item.description || '',
+            rate: parseFloat(item.rate) || 0,
+            sku: item.sku || '',
+            status: item.status,
+            category_name: item.category_name || 'Uncategorized',
+            stock_on_hand: parseInt(item.stock_on_hand) || 0,
+            created_time: item.created_time,
+            item_type: item.item_type,
+            unit: item.unit,
+            brand: item.brand,
+            manufacturer: item.manufacturer,
+            uploaded_to_faire: false // We'll check this separately
+          }));
         
         setZohoItems(items);
+        
+        // Extract unique manufacturers
+        const uniqueManufacturers = [...new Set(
+          items
+            .map(item => item.manufacturer || item.brand || 'Unknown')
+            .filter(m => m && m !== 'Unknown')
+        )].sort();
+        setManufacturers(uniqueManufacturers);
         
         // Update metrics with total count if available
         const pageContext = data.page_context || {};
         updateMetrics(items, pageContext.total);
         
         if (data.fetchedAll) {
-          addAlert('success', `Successfully fetched ALL ${items.length} items from Zoho Inventory`);
+          addAlert('success', `Successfully fetched ALL ${items.length} ${showInactive ? '' : 'active '}items from Zoho Inventory`);
         } else {
           if (pageContext.has_more_page) {
-            addAlert('info', `Fetched ${items.length} items. Total available: ${pageContext.total || 'Unknown'}`);
+            addAlert('info', `Fetched ${items.length} ${showInactive ? '' : 'active '}items. Total available: ${pageContext.total || 'Unknown'}`);
           } else {
-            addAlert('success', `Successfully fetched ${items.length} items from Zoho Inventory`);
+            addAlert('success', `Successfully fetched ${items.length} ${showInactive ? '' : 'active '}items from Zoho Inventory`);
           }
         }
       } else {
@@ -149,7 +179,7 @@ const ZohoFaireIntegration = () => {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [showInactive, selectedManufacturer]);
 
   // Check which items are already uploaded to Faire
   const checkFaireStatus = async () => {
@@ -310,14 +340,23 @@ const ZohoFaireIntegration = () => {
     }, 6000);
   };
 
-  // Filter items based on search term
+  // Filter items based on search term and manufacturer
   const filteredItems = useMemo(() => {
-    return zohoItems.filter(item =>
+    let filtered = zohoItems.filter(item =>
       item.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       item.sku.toLowerCase().includes(searchTerm.toLowerCase()) ||
       item.category_name.toLowerCase().includes(searchTerm.toLowerCase())
     );
-  }, [zohoItems, searchTerm]);
+    
+    // Apply manufacturer filter on client side as well
+    if (selectedManufacturer !== 'all') {
+      filtered = filtered.filter(item => 
+        (item.manufacturer || item.brand || '').toLowerCase() === selectedManufacturer.toLowerCase()
+      );
+    }
+    
+    return filtered;
+  }, [zohoItems, searchTerm, selectedManufacturer]);
 
   // Handle checkbox selection
   const handleSelectItem = (itemId) => {
@@ -356,7 +395,14 @@ const ZohoFaireIntegration = () => {
     const authCheckInterval = setInterval(checkAuthStatus, 5 * 60 * 1000);
     
     return () => clearInterval(authCheckInterval);
-  }, [fetchZohoItems, checkAuthStatus]);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Re-fetch when filters change
+  useEffect(() => {
+    if (authStatus?.authenticated) {
+      fetchZohoItems(false);
+    }
+  }, [selectedManufacturer, showInactive]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Check Faire status after fetching Zoho items
   useEffect(() => {
@@ -531,60 +577,100 @@ const ZohoFaireIntegration = () => {
           </Tabs>
           
           {activeTab === 0 && (
-            <Toolbar disableGutters>
-            <TextField
-              fullWidth
-              variant="outlined"
-              placeholder="Search by name, SKU, or category..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              sx={{ mr: 2 }}
-            />
-            
-            <Tooltip title="Refresh from Zoho (First 200)">
-              <IconButton 
-                onClick={async () => {
-                  const isAuthenticated = await checkAuthStatus();
-                  if (isAuthenticated) {
-                    fetchZohoItems(false);
-                  } else {
-                    addAlert('warning', 'Please authenticate with Zoho first');
-                  }
-                }}
-                disabled={loading}
-                color="primary"
-              >
-                <RefreshIcon />
-              </IconButton>
-            </Tooltip>
-            
-            <Button
-              variant="outlined"
-              startIcon={loading ? <CircularProgress size={20} /> : <InventoryIcon />}
-              onClick={async () => {
-                const isAuthenticated = await checkAuthStatus();
-                if (isAuthenticated) {
-                  fetchZohoItems(true);
-                } else {
-                  addAlert('warning', 'Please authenticate with Zoho first');
-                }
-              }}
-              disabled={loading}
-              sx={{ ml: 1 }}
-            >
-              {loading ? 'Loading...' : 'Load All Items'}
-            </Button>
-            
-            <Button
-              variant="contained"
-              startIcon={uploading ? <CircularProgress size={20} /> : <UploadIcon />}
-              onClick={uploadToFaire}
-              disabled={selectedItems.size === 0 || uploading}
-              sx={{ ml: 1 }}
-            >
-              {uploading ? 'Uploading...' : `Upload Selected (${selectedItems.size})`}
-            </Button>
-          </Toolbar>
+            <>
+              <Toolbar disableGutters>
+                <TextField
+                  fullWidth
+                  variant="outlined"
+                  placeholder="Search by name, SKU, or category..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  sx={{ mr: 2 }}
+                />
+                
+                <FormControl size="small" sx={{ minWidth: 180, mr: 1 }}>
+                  <InputLabel id="manufacturer-filter-label">
+                    <FilterListIcon sx={{ fontSize: 16, mr: 0.5 }} />
+                    Manufacturer
+                  </InputLabel>
+                  <Select
+                    labelId="manufacturer-filter-label"
+                    value={selectedManufacturer}
+                    onChange={(e) => setSelectedManufacturer(e.target.value)}
+                    label="Manufacturer"
+                  >
+                    <MenuItem value="all">All Manufacturers</MenuItem>
+                    <Divider />
+                    {manufacturers.map(mfr => (
+                      <MenuItem key={mfr} value={mfr}>{mfr}</MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+                
+                <Tooltip title={showInactive ? "Showing all items" : "Showing active items only"}>
+                  <Chip
+                    label={showInactive ? "All Items" : "Active Only"}
+                    color={showInactive ? "default" : "success"}
+                    onClick={() => setShowInactive(!showInactive)}
+                    sx={{ mr: 1 }}
+                  />
+                </Tooltip>
+                
+                <Tooltip title="Refresh from Zoho (First 200)">
+                  <IconButton 
+                    onClick={async () => {
+                      const isAuthenticated = await checkAuthStatus();
+                      if (isAuthenticated) {
+                        fetchZohoItems(false);
+                      } else {
+                        addAlert('warning', 'Please authenticate with Zoho first');
+                      }
+                    }}
+                    disabled={loading}
+                    color="primary"
+                  >
+                    <RefreshIcon />
+                  </IconButton>
+                </Tooltip>
+                
+                <Button
+                  variant="outlined"
+                  startIcon={loading ? <CircularProgress size={20} /> : <InventoryIcon />}
+                  onClick={async () => {
+                    const isAuthenticated = await checkAuthStatus();
+                    if (isAuthenticated) {
+                      fetchZohoItems(true);
+                    } else {
+                      addAlert('warning', 'Please authenticate with Zoho first');
+                    }
+                  }}
+                  disabled={loading}
+                  sx={{ ml: 1 }}
+                >
+                  {loading ? 'Loading...' : 'Load All Items'}
+                </Button>
+                
+                <Button
+                  variant="contained"
+                  startIcon={uploading ? <CircularProgress size={20} /> : <UploadIcon />}
+                  onClick={uploadToFaire}
+                  disabled={selectedItems.size === 0 || uploading}
+                  sx={{ ml: 1 }}
+                >
+                  {uploading ? 'Uploading...' : `Upload Selected (${selectedItems.size})`}
+                </Button>
+              </Toolbar>
+              
+              {selectedManufacturer !== 'all' && (
+                <Chip 
+                  label={`Filtered by: ${selectedManufacturer}`} 
+                  onDelete={() => setSelectedManufacturer('all')}
+                  color="primary"
+                  size="small"
+                  sx={{ mt: 1 }}
+                />
+              )}
+            </>
           )}          
           {uploading && (
             <Box sx={{ mt: 2 }}>
@@ -614,6 +700,7 @@ const ZohoFaireIntegration = () => {
               <TableCell>Name</TableCell>
               <TableCell>SKU</TableCell>
               <TableCell>Category</TableCell>
+              <TableCell>Manufacturer</TableCell>
               <TableCell align="right">Price</TableCell>
               <TableCell align="right">Stock</TableCell>
               <TableCell>Images</TableCell>
@@ -623,13 +710,13 @@ const ZohoFaireIntegration = () => {
           <TableBody>
             {loading ? (
               <TableRow>
-                <TableCell colSpan={8} align="center">
+                <TableCell colSpan={10} align="center">
                   <CircularProgress />
                 </TableCell>
               </TableRow>
             ) : paginatedItems.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={8} align="center">
+                <TableCell colSpan={10} align="center">
                   <Typography color="text.secondary">
                     No items found
                   </Typography>
@@ -668,6 +755,11 @@ const ZohoFaireIntegration = () => {
                     </Typography>
                   </TableCell>
                   <TableCell>{item.category_name}</TableCell>
+                  <TableCell>
+                    <Typography variant="body2">
+                      {item.manufacturer || item.brand || '-'}
+                    </Typography>
+                  </TableCell>
                   <TableCell align="right">
                     ${item.rate.toFixed(2)}
                   </TableCell>
