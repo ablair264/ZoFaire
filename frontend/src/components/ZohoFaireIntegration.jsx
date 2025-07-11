@@ -57,7 +57,7 @@ const ZohoFaireIntegration = () => {
   const theme = useTheme();
   // State management
   const [zohoItems, setZohoItems] = useState([]);
-  const [selectedItems, setSelectedItems] = useState(new Set());
+  const [selectedItems, setSelectedItems] = new Set());
   const [searchTerm, setSearchTerm] = useState('');
   const [loading, setLoading] = useState(false);
   const [syncStatus, setSyncStatus] = useState('idle'); // 'idle', 'fetchingZoho', 'matchingImages', 'uploadingToFaire', 'complete', 'error'
@@ -68,7 +68,8 @@ const ZohoFaireIntegration = () => {
   const [authStatus, setAuthStatus] = useState(false);
   const [sortColumn, setSortColumn] = useState('name');
   const [sortOrder, setSortOrder] = useState('asc'); // 'asc' or 'desc'
-  const [filterInactive, setFilterInactive] = useState(false);
+  const [filterInactive, setFilterInactive] = useState(true); // <--- Changed default to true (Active Items Only)
+  const [zohoItemsFetchedCount, setZohoItemsFetchedCount] = useState(0); // <--- NEW State for item count
 
 
   const addAlert = useCallback((message, severity = 'info') => {
@@ -110,7 +111,7 @@ const ZohoFaireIntegration = () => {
         per_page: rowsPerPage,
         sort_column: sortColumn,
         sort_order: sortOrder,
-        filterInactive: filterInactive
+        filterInactive: filterInactive // Send boolean as string 'true' or 'false'
       });
       if (searchTerm) {
         params.append('search_text', searchTerm);
@@ -123,14 +124,18 @@ const ZohoFaireIntegration = () => {
       }
       const data = await response.json();
       setZohoItems(data.items || []);
+      // Zoho API returns page_context.total_count for all items, not just current page.
+      // Use current page items length if total_count is not available or appropriate.
+      setZohoItemsFetchedCount(data.page_context ? data.page_context.total_count : (data.items ? data.items.length : 0)); // <--- Update count
       addAlert('Zoho items fetched successfully!', 'success');
     } catch (error) {
       console.error('Error fetching Zoho items:', error);
       addAlert(`Error fetching Zoho items: ${error.message}`, 'error');
+      setZohoItemsFetchedCount(0); // Reset count on error
     } finally {
       if (showLoading) setLoading(false);
     }
-  }, [page, rowsPerPage, searchTerm, sortColumn, sortOrder, filterInactive, addAlert]);
+  }, [page, rowsPerPage, searchTerm, sortColumn, sortOrder, filterInactive, addAlert]); // Added filterInactive dependency
 
   useEffect(() => {
     if (authStatus && activeTab === 0) { // Only fetch if authenticated and on the Zoho Items tab
@@ -143,6 +148,7 @@ const ZohoFaireIntegration = () => {
     const zohoAuthUrl = process.env.REACT_APP_ZOHO_AUTH_URL || 'https://accounts.zoho.eu/oauth/v2/auth';
     const clientId = process.env.REACT_APP_ZOHO_CLIENT_ID;
 
+    // Confirmed scopes are correct as per user's last provided file and previous statement
     const scope = 'ZohoInventory.items.READ,ZohoInventory.items.CREATE,ZohoInventory.items.UPDATE,ZohoInventory.CompositeItems.READ,ZohoInventory.CompositeItems.CREATE,ZohoInventory.CompositeItems.UPDATE,ZohoInventory.settings.READ,ZohoInventory.settings.CREATE,ZohoInventory.settings.UPDATE,ZohoInventory.organizations.READ,aaaserver.profile.READ';
 
     const authUrl = `${zohoAuthUrl}?scope=${scope}&client_id=${clientId}&response_type=code&redirect_uri=${redirectUri}&access_type=offline&prompt=consent`;
@@ -193,13 +199,17 @@ const ZohoFaireIntegration = () => {
     setSortColumn(columnId);
   };
 
+  // FIX: Corrected logic for filterInactive checkbox
   const handleFilterInactiveChange = (event) => {
-    setFilterInactive(event.target.checked);
+    setFilterInactive(event.target.checked); // Set filterInactive to true if checked (meaning, filter for active items)
   };
+
 
   const isSelected = (itemId) => selectedItems.has(itemId);
 
   const filteredItems = useMemo(() => {
+    // Note: Filtering by searchTerm is done on current page data.
+    // Full filtering should ideally happen via backend search_text param.
     return zohoItems.filter(item =>
       item.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       item.sku.toLowerCase().includes(searchTerm.toLowerCase())
@@ -213,8 +223,6 @@ const ZohoFaireIntegration = () => {
     addAlert('Starting complete sync workflow...', 'info');
 
     try {
-      // Simulate/track steps. In a real scenario, the backend might send progress updates
-      // For now, we'll assume the backend sends a final message with details.
       const response = await fetch(`${API_BASE_URL}/workflow/complete-sync`, { method: 'POST' });
 
       if (!response.ok) {
@@ -230,6 +238,7 @@ const ZohoFaireIntegration = () => {
               `Sync completed successfully! Fetched ${zohoItemsFetched} Zoho items, matched ${matchedItems} with images, and completed Faire upload for ${itemsUploadedToFaire} items.`,
               'success'
           );
+          setZohoItemsFetchedCount(zohoItemsFetched); // Update count after successful sync
       } else {
           addAlert(data.message, 'success');
       }
@@ -246,6 +255,7 @@ const ZohoFaireIntegration = () => {
       }
       addAlert(errorMessage, 'error');
       setSyncStatus('error'); // Set error status
+      setZohoItemsFetchedCount(0); // Reset count on error
     } finally {
       setLoading(false);
     }
@@ -320,40 +330,73 @@ const ZohoFaireIntegration = () => {
           Zoho-Faire Integration Dashboard
         </Typography>
 
-        {/* Authentication Section */}
-        <Card variant="outlined" sx={{ mb: 3, p: 2, borderColor: theme.palette.divider }}>
-          <CardContent>
-            <Grid container spacing={2} alignItems="center">
-              <Grid item>
-                <Avatar sx={{ bgcolor: authStatus ? theme.palette.success.main : theme.palette.error.main }}>
-                  {authStatus ? <CheckCircleIcon /> : <WarningIcon />}
+        {/* Authentication Section - Enhanced Layout & Logo */}
+        {/* Placed in a Grid to easily align with other future cards */}
+        <Grid container spacing={3} alignItems="center" sx={{ mb: 3 }}>
+          <Grid item xs={12} sm={6} md={4}> {/* Adjust grid sizing as needed for other cards */}
+            <Card variant="outlined" sx={{ p: 2, borderColor: theme.palette.divider, borderRadius: 2 }}>
+              <CardContent sx={{ display: 'flex', alignItems: 'center', p: '16px !important' }}>
+                <Avatar sx={{ bgcolor: 'transparent', mr: 2 }}>
+                  {/* Zoho Inventory Logo */}
+                  <img
+                    src="https://www.thesmbguide.com/images/the-smb-guide-zoho-inventory-1024x512-20231114.png"
+                    alt="Zoho Inventory Logo"
+                    style={{ width: 40, height: 40, objectFit: 'contain' }}
+                  />
                 </Avatar>
-              </Grid>
-              <Grid item xs>
-                <Typography variant="h6" color="text.secondary">
-                  Zoho Authentication Status:
-                </Typography>
-                <Chip
-                  label={authStatus ? 'Authenticated' : 'Not Authenticated'}
-                  color={authStatus ? 'success' : 'error'}
-                  sx={{ mt: 1, fontWeight: 'bold' }}
-                />
-              </Grid>
-              <Grid item>
+                <Box sx={{ flexGrow: 1 }}>
+                  <Typography variant="subtitle1" color="text.secondary" noWrap>
+                    Zoho Inventory
+                  </Typography>
+                  <Chip
+                    label={authStatus ? 'Authenticated' : 'Not Authenticated'}
+                    color={authStatus ? 'success' : 'error'}
+                    sx={{ mt: 0.5, fontWeight: 'bold' }}
+                    icon={authStatus ? <CheckCircleIcon /> : <WarningIcon />}
+                  />
+                  {authStatus && zohoItemsFetchedCount > 0 && (
+                    <Tooltip title={`Successfully fetched ${zohoItemsFetchedCount} items from Zoho recently.`}>
+                       <Box sx={{ display: 'flex', alignItems: 'center', mt: 1 }}>
+                         <TrendingUpIcon color="info" sx={{ mr: 0.5 }} />
+                         <Typography variant="caption" color="text.secondary">
+                            {zohoItemsFetchedCount} Items Fetched
+                         </Typography>
+                       </Box>
+                    </Tooltip>
+                  )}
+                </Box>
                 {!authStatus && (
                   <Button
                     variant="contained"
                     color="primary"
                     onClick={handleAuthZoho}
                     startIcon={<ScheduleIcon />}
+                    size="small"
                   >
-                    Authorize Zoho
+                    Authorize
                   </Button>
                 )}
-              </Grid>
-            </Grid>
-          </CardContent>
-        </Card>
+              </CardContent>
+            </Card>
+          </Grid>
+          {/* Placeholder for other cards if they exist. Example: */}
+          {/* <Grid item xs={12} sm={6} md={4}>
+            <Card>
+              <CardContent>
+                <Typography variant="subtitle1">Faire Sync Status</Typography>
+                <Chip label="Last Sync: N/A" color="info" size="small" />
+              </CardContent>
+            </Card>
+          </Grid>
+          <Grid item xs={12} sm={6} md={4}>
+            <Card>
+              <CardContent>
+                <Typography variant="subtitle1">Image Storage</Typography>
+                <Chip label="Firebase: Connected" color="success" size="small" />
+              </CardContent>
+            </Card>
+          </Grid> */}
+        </Grid>
 
         {/* Tabs for Navigation */}
         <Tabs
@@ -393,11 +436,11 @@ const ZohoFaireIntegration = () => {
                 onChange={handleSearchChange}
                 sx={{ mr: 2, flexShrink: 0 }}
               />
-              <FormControlLabel // <--- COMPONENT NOW DEFINED
+              <FormControlLabel
                 control={
                   <Checkbox
-                    checked={!filterInactive} // Checkbox is for 'Active Items Only'
-                    onChange={(e) => setFilterInactive(!e.target.checked)} // Invert logic for the 'filterInactive' state
+                    checked={filterInactive} // <--- Corrected logic for filterInactive
+                    onChange={handleFilterInactiveChange} // <--- Corrected handler
                     color="primary"
                   />
                 }
