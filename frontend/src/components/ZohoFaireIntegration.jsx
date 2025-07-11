@@ -57,7 +57,7 @@ const ZohoFaireIntegration = () => {
   const theme = useTheme();
   // State management
   const [zohoItems, setZohoItems] = useState([]);
-  const [selectedItems, setSelectedItems] = new Set());
+  const [selectedItems, setSelectedItems] = useState(new Set());
   const [searchTerm, setSearchTerm] = useState('');
   const [loading, setLoading] = useState(false);
   const [syncStatus, setSyncStatus] = useState('idle'); // 'idle', 'fetchingZoho', 'matchingImages', 'uploadingToFaire', 'complete', 'error'
