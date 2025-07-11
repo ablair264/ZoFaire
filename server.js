@@ -361,7 +361,7 @@ app.post('/api/workflow/complete-sync', async (req, res) => {
         zohoItemsFetched = allZohoItems.length;
         console.log(`Fetched ${zohoItemsFetched} Zoho items for sync (after filtering 'service' and 'goods').`);
 
-        // Save all items to Firestore collection 'zofaire_items'
+        // Save all items to Firestore collection 'items_data'
         for (const item of allZohoItems) {
             try {
                 await saveItemToFirestore(item, []); // Save without images for now
@@ -1000,7 +1000,7 @@ app.get('/api/firebase/items', async (req, res) => {
         
         const { limit = 100, hasImages, manufacturer } = req.query;
         
-        let query = db.collection('zofaire_items');
+        let query = db.collection('items_data');
         
         if (hasImages === 'true') {
             query = query.where('hasImages', '==', true);
