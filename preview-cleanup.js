@@ -34,8 +34,8 @@ async function previewCleanup() {
       const docId = doc.id;
       const data = doc.data();
       
-      // Check if document has _syncSource as "zoho_api"
-      if (data._syncSource === 'zoho_api') {
+      // Check if document ID is a numeric ID (like 310656000000263000)
+      if (/^\d+$/.test(docId)) {
         toDelete.push({
           id: docId,
           sku: data.sku || 'No SKU',
@@ -64,7 +64,7 @@ async function previewCleanup() {
         console.log(`... and ${toDelete.length - 10} more documents`);
       }
     } else {
-      console.log('No documents found with _syncSource = "zoho_api"');
+      console.log('No documents found with numeric IDs (like 310656000000263000)');
     }
     
     console.log('\n=== DOCUMENTS TO KEEP ===');

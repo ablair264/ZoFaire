@@ -31,8 +31,8 @@ async function cleanupDuplicateItems() {
       const docId = doc.id;
       const data = doc.data();
       
-      // Check if document has _syncSource as "zoho_api"
-      if (data._syncSource === 'zoho_api') {
+      // Check if document ID is a numeric ID (like 310656000000263000)
+      if (/^\d+$/.test(docId)) {
         try {
           await doc.ref.delete();
           console.log(`Deleted document: ${docId}`);
