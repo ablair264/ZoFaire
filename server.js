@@ -517,6 +517,152 @@ app.post('/api/firebase/match-images', async (req, res) => {
     }
 });
 
+// NEW: Batch Image Upload Endpoint
+app.post('/api/firebase/batch-upload-images', upload.array('images', 50), async (req, res) => {
+    try {
+        if (!req.files || req.files.length === 0) {
+            return res.status(400).json({ success: false, message: 'No files uploaded.' });
+        }
+
+        const { brand } = req.body;
+
+        if (!brand) {
+            return res.status(400).json({ success: false, message: 'Brand is required for batch upload.' });
+        }
+
+        console.log(`Batch upload: Processing ${req.files.length} images for brand: ${brand}`);
+
+        // Create temp directories
+        const tempInputDir = path.join(__dirname, 'uploads', 'batch-input', Date.now().toString());
+        const tempOutputDir = path.join(__dirname, 'uploads', 'batch-output', Date.now().toString());
+        await fs.mkdir(tempInputDir, { recursive: true });
+        await fs.mkdir(tempOutputDir, { recursive: true });
+
+        const processedResults = [];
+        const failedUploads = [];
+
+        try {
+            // Move uploaded files to temp input directory with proper extensions
+            for (const file of req.files) {
+                const ext = path.extname(file.originalname) || '.jpg';
+                const newPath = path.join(tempInputDir, `${path.basename(file.filename)}${ext}`);
+                await fs.rename(file.path, newPath);
+            }
+
+            // Run all-in-one-processor.py on the batch
+            const scriptPath = path.join(__dirname, 'all-in-one-processor.py');
+            const args = [
+                scriptPath,
+                '--input', tempInputDir,
+                '--output', tempOutputDir,
+                '--brand', brand.toLowerCase(),
+                '--padding', '50',
+                '--quality', '85'
+            ];
+
+            console.log(`Running batch processor: python ${args.join(' ')}`);
+            
+            const pythonProcess = spawn('python', args);
+            let scriptOutput = '';
+            let scriptError = '';
+
+            pythonProcess.stdout.on('data', (data) => {
+                scriptOutput += data.toString();
+                console.log(`Batch processor: ${data}`);
+            });
+
+            pythonProcess.stderr.on('data', (data) => {
+                scriptError += data.toString();
+                console.error(`Batch processor error: ${data}`);
+            });
+
+            await new Promise((resolve, reject) => {
+                pythonProcess.on('close', (code) => {
+                    if (code === 0) {
+                        resolve();
+                    } else {
+                        reject(new Error(`Python script exited with code ${code}. Error: ${scriptError}`));
+                    }
+                });
+
+                pythonProcess.on('error', (err) => {
+                    reject(err);
+                });
+            });
+
+            // Upload processed images to Firebase
+            const processedFiles = await fs.readdir(tempOutputDir);
+            
+            for (const filename of processedFiles) {
+                try {
+                    const filePath = path.join(tempOutputDir, filename);
+                    
+                    // Extract SKU from filename (assuming format: SKU_variant.ext or SKU.ext)
+                    const baseName = path.basename(filename, path.extname(filename));
+                    const sku = baseName.split('_')[0];
+                    
+                    // Upload to Firebase
+                    const imageUrl = await uploadProcessedImage(filePath, brand.toLowerCase(), sku);
+                    
+                    processedResults.push({
+                        filename: filename,
+                        sku: sku,
+                        url: imageUrl,
+                        success: true
+                    });
+                } catch (uploadError) {
+                    console.error(`Failed to upload ${filename}:`, uploadError);
+                    failedUploads.push({
+                        filename: filename,
+                        error: uploadError.message
+                    });
+                }
+            }
+
+        } finally {
+            // Cleanup temp directories
+            try {
+                await fs.rm(tempInputDir, { recursive: true, force: true });
+                await fs.rm(tempOutputDir, { recursive: true, force: true });
+            } catch (cleanupError) {
+                console.error('Error cleaning up temp directories:', cleanupError);
+            }
+        }
+
+        res.json({
+            success: true,
+            message: `Batch upload completed. ${processedResults.length} images processed successfully.`,
+            processed: processedResults,
+            failed: failedUploads,
+            summary: {
+                total: req.files.length,
+                successful: processedResults.length,
+                failed: failedUploads.length
+            }
+        });
+
+    } catch (error) {
+        console.error('Error in batch image upload:', error);
+        res.status(500).json({ 
+            success: false, 
+            message: 'Batch image upload failed.', 
+            error: error.message 
+        });
+    }
+});
+
+// NEW: Get Faire status
+app.get('/api/faire/status', (req, res) => {
+    const connected = !!FAIRE_ACCESS_TOKEN;
+    res.json({ connected });
+});
+
+// NEW: Get Firebase status
+app.get('/api/firebase/status', (req, res) => {
+    const connected = firebaseStorage !== undefined;
+    res.json({ connected });
+});
+
 
 // Fallback for any other request (API only backend)
 app.use((req, res) => {

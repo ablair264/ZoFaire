@@ -28,7 +28,10 @@ import {
   FormControl,
   InputLabel,
   Select,
-  MenuItem
+  MenuItem,
+  Avatar,
+  ListItemAvatar,
+  useTheme
 } from '@mui/material';
 import {
   Image as ImageIcon,
@@ -43,6 +46,66 @@ import {
 } from '@mui/icons-material';
 
 const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'https://zofaire.onrender.com/api';
+
+// Brand avatar component
+const BrandAvatar = ({ brand, size = 24 }) => {
+  const theme = useTheme();
+  const [imageError, setImageError] = useState(false);
+  
+  const brandName = brand || 'Unknown';
+  const brandLower = brandName.toLowerCase().replace(/\s+/g, '');
+  const logoPath = `/logos/${brandLower}.png`;
+  
+  // Generate color based on brand name
+  const stringToColor = (string) => {
+    let hash = 0;
+    for (let i = 0; i < string.length; i += 1) {
+      hash = string.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    let color = '#';
+    for (let i = 0; i < 3; i += 1) {
+      const value = (hash >> (i * 8)) & 0xff;
+      color += `00${value.toString(16)}`.slice(-2);
+    }
+    return color;
+  };
+  
+  const getInitials = (name) => {
+    return name
+      .split(' ')
+      .map(word => word[0])
+      .join('')
+      .toUpperCase()
+      .slice(0, 2);
+  };
+  
+  if (imageError || !brand) {
+    return (
+      <Avatar
+        sx={{
+          width: size,
+          height: size,
+          bgcolor: stringToColor(brandName),
+          fontSize: size * 0.4,
+          fontWeight: 600
+        }}
+      >
+        {getInitials(brandName)}
+      </Avatar>
+    );
+  }
+  
+  return (
+    <Avatar
+      src={logoPath}
+      alt={brandName}
+      sx={{ width: size, height: size, bgcolor: 'white' }}
+      onError={() => setImageError(true)}
+    >
+      {getInitials(brandName)}
+    </Avatar>
+  );
+};
 
 const ImageManagement = ({ zohoItems, onAlert, onRefreshItems }) => {
   const [selectedProduct, setSelectedProduct] = useState(null);
@@ -70,6 +133,13 @@ const ImageManagement = ({ zohoItems, onAlert, onRefreshItems }) => {
   const [manufacturers, setManufacturers] = useState([]);
   const [matchProgress, setMatchProgress] = useState({ current: 0, total: 0 });
   const [isMatching, setIsMatching] = useState(false);
+  
+  // New states for batch image upload
+  const [batchUploadDialog, setBatchUploadDialog] = useState(false);
+  const [batchSelectedBrand, setBatchSelectedBrand] = useState('');
+  const [batchFiles, setBatchFiles] = useState([]);
+  const [batchUploading, setBatchUploading] = useState(false);
+  const [batchUploadProgress, setBatchUploadProgress] = useState({ current: 0, total: 0 });
 
   // Load Firebase brands on mount
   useEffect(() => {
@@ -389,6 +459,75 @@ const ImageManagement = ({ zohoItems, onAlert, onRefreshItems }) => {
     const files = Array.from(event.target.files);
     setSelectedFiles(files);
   };
+  
+  // Batch file selection handler
+  const handleBatchFileSelect = (event) => {
+    const files = Array.from(event.target.files);
+    setBatchFiles(files);
+  };
+  
+  // Batch upload handler
+  const handleBatchUpload = async () => {
+    if (batchFiles.length === 0) {
+      onAlert('Please select images to upload', 'warning');
+      return;
+    }
+    
+    if (!batchSelectedBrand) {
+      onAlert('Please select a brand', 'warning');
+      return;
+    }
+    
+    setBatchUploading(true);
+    setBatchUploadProgress({ current: 0, total: batchFiles.length });
+    
+    try {
+      const formData = new FormData();
+      formData.append('brand', batchSelectedBrand);
+      
+      // Add all files
+      batchFiles.forEach(file => {
+        formData.append('images', file);
+      });
+      
+      const response = await fetch(`${API_BASE_URL}/firebase/batch-upload-images`, {
+        method: 'POST',
+        body: formData
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success) {
+          onAlert(
+            `Batch upload complete! ${data.summary.successful} succeeded, ${data.summary.failed} failed`,
+            data.summary.failed > 0 ? 'warning' : 'success'
+          );
+          
+          // Close dialog and reset
+          setBatchUploadDialog(false);
+          setBatchFiles([]);
+          setBatchSelectedBrand('');
+          
+          // Refresh brands list
+          loadFirebaseBrands();
+          
+          // If we're viewing this brand, refresh the image matching
+          if (selectedManufacturer === batchSelectedBrand.toLowerCase()) {
+            matchAllImages();
+          }
+        }
+      } else {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Batch upload failed');
+      }
+    } catch (error) {
+      console.error('Error in batch upload:', error);
+      onAlert(`Batch upload failed: ${error.message}`, 'error');
+    } finally {
+      setBatchUploading(false);
+      setBatchUploadProgress({ current: 0, total: 0 });
+    }
+  };
 
   // Filter products by manufacturer
   const filteredProducts = selectedManufacturer === 'all' 
@@ -440,11 +579,25 @@ const ImageManagement = ({ zohoItems, onAlert, onRefreshItems }) => {
                   value={selectedManufacturer}
                   onChange={(e) => setSelectedManufacturer(e.target.value)}
                   label="Manufacturer"
+                  renderValue={(selected) => {
+                    if (selected === 'all') return 'All Manufacturers';
+                    return (
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <BrandAvatar brand={selected} size={20} />
+                        <span>{selected.charAt(0).toUpperCase() + selected.slice(1)}</span>
+                      </Box>
+                    );
+                  }}
                 >
                   <MenuItem value="all">All Manufacturers</MenuItem>
                   <Divider />
                   {manufacturers.map(mfr => (
-                    <MenuItem key={mfr} value={mfr}>{mfr}</MenuItem>
+                    <MenuItem key={mfr} value={mfr}>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <BrandAvatar brand={mfr} size={24} />
+                        <span>{mfr.charAt(0).toUpperCase() + mfr.slice(1)}</span>
+                      </Box>
+                    </MenuItem>
                   ))}
                 </Select>
               </FormControl>
@@ -474,8 +627,19 @@ const ImageManagement = ({ zohoItems, onAlert, onRefreshItems }) => {
                 startIcon={<CloudSyncIcon />}
                 onClick={runCompleteSync}
                 disabled={loading || isMatching}
+                sx={{ mr: 1 }}
               >
                 Complete Sync
+              </Button>
+              
+              <Button
+                variant="contained"
+                color="secondary"
+                startIcon={<AddPhotoIcon />}
+                onClick={() => setBatchUploadDialog(true)}
+                disabled={loading || isMatching}
+              >
+                Batch Upload
               </Button>
             </Grid>
           </Grid>
@@ -523,10 +687,13 @@ const ImageManagement = ({ zohoItems, onAlert, onRefreshItems }) => {
                         <Typography variant="caption" color="text.secondary">
                           SKU: {product.sku}
                         </Typography>
-                        {product.manufacturer && (
-                          <Typography variant="caption" color="text.secondary" display="block">
-                            {product.manufacturer}
-                          </Typography>
+                        {(product.manufacturer || product.brand) && (
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mt: 0.5 }}>
+                            <BrandAvatar brand={product.manufacturer || product.brand} size={16} />
+                            <Typography variant="caption" color="text.secondary">
+                              {product.manufacturer || product.brand}
+                            </Typography>
+                          </Box>
                         )}
                       </Box>
                       
@@ -773,6 +940,125 @@ const ImageManagement = ({ zohoItems, onAlert, onRefreshItems }) => {
             startIcon={uploading ? <CircularProgress size={20} /> : <CloudUploadIcon />}
           >
             {uploading ? 'Processing...' : 'Process & Upload'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Batch Upload Dialog */}
+      <Dialog
+        open={batchUploadDialog}
+        onClose={() => setBatchUploadDialog(false)}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>
+          <Box display="flex" alignItems="center" gap={1}>
+            <AddPhotoIcon color="primary" />
+            <Typography variant="h6">Batch Image Upload</Typography>
+          </Box>
+        </DialogTitle>
+        
+        <DialogContent>
+          <Box sx={{ mt: 2 }}>
+            <Typography variant="body2" color="text.secondary" gutterBottom>
+              Upload multiple product images at once. Images should be named with their SKU 
+              (e.g., "ABC123.jpg" or "ABC123_main.jpg").
+            </Typography>
+            
+            <FormControl fullWidth sx={{ mt: 3, mb: 3 }}>
+              <InputLabel id="batch-brand-select-label">Select Brand</InputLabel>
+              <Select
+                labelId="batch-brand-select-label"
+                value={batchSelectedBrand}
+                onChange={(e) => setBatchSelectedBrand(e.target.value)}
+                label="Select Brand"
+                renderValue={(selected) => {
+                  if (!selected) return '';
+                  return (
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                      <BrandAvatar brand={selected} size={20} />
+                      <span>{selected}</span>
+                    </Box>
+                  );
+                }}
+              >
+                {[...new Set([
+                  ...firebaseBrands,
+                  ...manufacturers.map(m => m.charAt(0).toUpperCase() + m.slice(1))
+                ])].sort().map(brand => (
+                  <MenuItem key={brand} value={brand}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                      <BrandAvatar brand={brand} size={24} />
+                      <span>{brand}</span>
+                    </Box>
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+            
+            <input
+              accept="image/*"
+              style={{ display: 'none' }}
+              id="batch-image-file-input"
+              multiple
+              type="file"
+              onChange={handleBatchFileSelect}
+            />
+            <label htmlFor="batch-image-file-input">
+              <Button
+                variant="outlined"
+                component="span"
+                startIcon={<AddPhotoIcon />}
+                fullWidth
+                size="large"
+              >
+                Select Images ({batchFiles.length} selected)
+              </Button>
+            </label>
+            
+            {batchFiles.length > 0 && (
+              <Box sx={{ mt: 2, maxHeight: 200, overflow: 'auto' }}>
+                <List dense>
+                  {batchFiles.map((file, index) => (
+                    <ListItem key={index}>
+                      <ListItemIcon>
+                        <ImageIcon color="primary" />
+                      </ListItemIcon>
+                      <ListItemText
+                        primary={file.name}
+                        secondary={`${(file.size / 1024 / 1024).toFixed(2)} MB`}
+                      />
+                    </ListItem>
+                  ))}
+                </List>
+                <Typography variant="caption" color="text.secondary" sx={{ mt: 1 }}>
+                  Total size: {(batchFiles.reduce((acc, file) => acc + file.size, 0) / 1024 / 1024).toFixed(2)} MB
+                </Typography>
+              </Box>
+            )}
+          </Box>
+          
+          {batchUploading && (
+            <Box sx={{ mt: 3 }}>
+              <LinearProgress />
+              <Typography variant="body2" color="text.secondary" sx={{ mt: 1, textAlign: 'center' }}>
+                Processing images... Please wait
+              </Typography>
+            </Box>
+          )}
+        </DialogContent>
+        
+        <DialogActions>
+          <Button onClick={() => setBatchUploadDialog(false)} disabled={batchUploading}>
+            Cancel
+          </Button>
+          <Button
+            variant="contained"
+            onClick={handleBatchUpload}
+            disabled={batchFiles.length === 0 || !batchSelectedBrand || batchUploading}
+            startIcon={batchUploading ? <CircularProgress size={20} /> : <CloudUploadIcon />}
+          >
+            {batchUploading ? 'Uploading...' : 'Upload & Process'}
           </Button>
         </DialogActions>
       </Dialog>
