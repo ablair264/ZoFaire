@@ -29,7 +29,7 @@ import { alpha, useTheme } from '@mui/material/styles';
 
 const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:3001/api';
 
-const ItemDetail = ({ open, onClose, item }) => {
+const ItemDetail = ({ open, onClose, item, onAlert, onRefreshItems }) => {
   const theme = useTheme();
   const [images, setImages] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -37,13 +37,20 @@ const ItemDetail = ({ open, onClose, item }) => {
 
   useEffect(() => {
     if (open && item) {
-      fetchItemImages();
+      // First check if item already has images
+      if (item.images && item.images.length > 0) {
+        setImages(item.images);
+        setError(null);
+      } else {
+        // If no images in item, try to fetch them
+        fetchItemImages();
+      }
     }
   }, [open, item]);
 
   const fetchItemImages = async () => {
-    if (!item || !item.sku || !item.manufacturer) {
-      setError('Item missing required information (SKU or manufacturer)');
+    if (!item || !item.sku) {
+      setError('Item missing required information (SKU)');
       return;
     }
 
@@ -51,8 +58,9 @@ const ItemDetail = ({ open, onClose, item }) => {
     setError(null);
 
     try {
+      // Use the new endpoint that gets images by SKU
       const response = await fetch(
-        `${API_BASE_URL}/firebase/images/${encodeURIComponent(item.manufacturer)}/${encodeURIComponent(item.sku)}`
+        `${API_BASE_URL}/firebase/product-images/${encodeURIComponent(item.sku)}`
       );
 
       if (!response.ok) {
@@ -60,10 +68,15 @@ const ItemDetail = ({ open, onClose, item }) => {
       }
 
       const data = await response.json();
-      setImages(data.images || []);
+      if (data.success && data.images) {
+        setImages(data.images || []);
+      } else {
+        setImages([]);
+      }
     } catch (err) {
       console.error('Error fetching images:', err);
       setError(err.message);
+      setImages([]);
     } finally {
       setLoading(false);
     }
@@ -172,7 +185,7 @@ const ItemDetail = ({ open, onClose, item }) => {
                       Brand
                     </Typography>
                     <Typography variant="body1" sx={{ fontWeight: 500 }}>
-                      {typeof item.brand === 'string' ? item.brand : 'N/A'}
+                      {typeof (item.brand || item.manufacturer) === 'string' ? (item.brand || item.manufacturer) : 'N/A'}
                     </Typography>
                   </Grid>
                   <Grid item xs={6}>
@@ -196,18 +209,18 @@ const ItemDetail = ({ open, onClose, item }) => {
                   </Grid>
                   <Grid item xs={6}>
                     <Typography variant="body2" color="text.secondary">
-                      Purchase Rate
+                      Purchase Price
                     </Typography>
-                    <Typography variant="body1" sx={{ fontWeight: 500 }}>
-                      {formatCurrency(item.purchase_rate)}
+                    <Typography variant="body1" sx={{ fontWeight: 500, color: theme.palette.success.main }}>
+                      {formatCurrency(item.purchase_price || item.purchase_rate)}
                     </Typography>
                   </Grid>
                   <Grid item xs={6}>
                     <Typography variant="body2" color="text.secondary">
-                      Selling Rate
+                      Selling Price
                     </Typography>
-                    <Typography variant="body1" sx={{ fontWeight: 500 }}>
-                      {formatCurrency(item.rate)}
+                    <Typography variant="body1" sx={{ fontWeight: 500, color: theme.palette.primary.main }}>
+                      {formatCurrency(item.rate || item.selling_price)}
                     </Typography>
                   </Grid>
                   <Grid item xs={6}>

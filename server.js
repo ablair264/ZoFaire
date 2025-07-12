@@ -375,6 +375,8 @@ app.get('/api/items', async (req, res) => {
                     brand_normalized: brand_normalized, // Normalized for filtering
                     rate: itemData.rate,
                     purchase_rate: itemData.purchase_rate,
+                    purchase_price: itemData.purchase_price || itemData.purchase_rate, // Include purchase_price
+                    selling_price: itemData.selling_price || itemData.rate, // Include selling_price
                     status: itemData.status,
                     available_stock: itemData.available_stock,
                     stock_on_hand: itemData.stock_on_hand,

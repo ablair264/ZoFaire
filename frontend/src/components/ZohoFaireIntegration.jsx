@@ -1375,7 +1375,7 @@ const ZohoFaireIntegration = () => {
                   </TableCell>
                   <TableCell>Status</TableCell>
                   <TableCell align="center">Stock</TableCell>
-                  <TableCell align="right">Price</TableCell>
+                  <TableCell align="right">Purchase Price</TableCell>
                   <TableCell align="center">Actions</TableCell>
                   <TableCell align="center">Faire Status</TableCell>
                 </TableRow>
@@ -1419,16 +1419,13 @@ const ZohoFaireIntegration = () => {
                           </TableCell>
                           <TableCell>
                             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                              <BrandAvatar brand={typeof (item.brand || item.manufacturer) === 'string' ? (item.brand || item.manufacturer) : 'Unknown'} size={32} />
+                              <BrandAvatar brand={item.brand || item.manufacturer || 'Unknown'} size={32} />
                               <Box>
                                 <Typography variant="body2" sx={{ fontWeight: 500 }}>
                                   {typeof item.name === 'string' ? item.name : 'No Name'}
                                 </Typography>
-                                <Tooltip title="View details">
-                                  <VisibilityIcon fontSize="small" color="action" />
-                                </Tooltip>
                                 <Typography variant="caption" color="text.secondary">
-                                  {typeof (item.brand || item.manufacturer) === 'string' ? (item.brand || item.manufacturer) : 'No Brand'}
+                                  {item.brand || item.manufacturer || 'No Brand'}
                                 </Typography>
                               </Box>
                             </Box>
@@ -1465,19 +1462,19 @@ const ZohoFaireIntegration = () => {
                           </TableCell>
                           <TableCell align="right">
                             <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                              ${parseFloat(item.rate || 0).toFixed(2)}
+                              £{parseFloat(item.purchase_price || item.purchase_rate || 0).toFixed(2)}
                             </Typography>
                           </TableCell>
                           <TableCell align="center">
                             <Box sx={{ display: 'flex', gap: 1, justifyContent: 'center' }}>
-                              {item.images_matched ? (
+                              {item.images_matched && item.images && item.images.length > 0 ? (
                                 <img
-                                  src={item.images && item.images.length > 0 ? item.images[0].url : ''}
+                                  src={item.images[0].url || item.images[0]}
                                   alt="thumbnail"
                                   style={{ width: 32, height: 32, objectFit: 'cover', borderRadius: '50%' }}
                                 />
                               ) : (
-                                <ImageNotSupportedIcon />
+                                <ImageNotSupportedIcon sx={{ color: 'action.disabled' }} />
                               )}
                               <Tooltip title="Manage product images">
                                 <IconButton
