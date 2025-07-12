@@ -138,23 +138,29 @@ async function getProductImages(manufacturer, sku) {
     
     // Return image URLs and metadata
     const images = await Promise.all(imageFiles.map(async (file, index) => {
-      const [signedUrl] = await file.getSignedUrl({
-        action: 'read',
-        expires: Date.now() + 24 * 60 * 60 * 1000 // 24 hours
-      });
+      // Make file public if it isn't already
+      try {
+        await file.makePublic();
+      } catch (error) {
+        console.warn(`Could not make file public: ${file.name}`);
+      }
       
-      const metadata = await file.getMetadata();
+      // Get public URL
+      const publicUrl = `https://storage.googleapis.com/${bucket.name}/${file.name}`;
+      
+      // Get metadata
+      const [metadata] = await file.getMetadata();
       const fileName = file.name.split('/').pop();
       const isVariant = fileName.includes('_400x400') || fileName.includes('_150x150');
       
       return {
         name: fileName,
         path: file.name,
-        url: signedUrl,
-        publicUrl: `https://storage.googleapis.com/${bucket.name}/${file.name}`,
-        size: parseInt(metadata[0].size),
-        contentType: metadata[0].contentType,
-        updated: metadata[0].updated,
+        url: publicUrl,
+        publicUrl: publicUrl,
+        size: parseInt(metadata.size),
+        contentType: metadata.contentType,
+        updated: metadata.updated,
         index: index + 1,
         isVariant,
         variant: isVariant ? fileName.match(/_(\d+x\d+)\./)?.[1] : null
@@ -259,6 +265,7 @@ async function saveItemToFirestore(item, images) {
     if (manufacturerName && typeof manufacturerName === 'object' && manufacturerName.manufacturer_name) {
       manufacturerName = manufacturerName.manufacturer_name;
     }
+    
     const data = {
       ...item,
       images: images.map(img => ({
@@ -275,6 +282,7 @@ async function saveItemToFirestore(item, images) {
       lastUpdated: admin.firestore.FieldValue.serverTimestamp(),
       normalizedManufacturer: normalizeBrandName(manufacturerName)
     };
+    
     if (!itemsDataQuery.empty) {
       const docRef = itemsDataQuery.docs[0].ref;
       await docRef.set(data, { merge: true });
