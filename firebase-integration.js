@@ -459,6 +459,41 @@ async function uploadProcessedImage(buffer, destinationPath, metadata = {}) {
   }
 }
 
+// Update item's image status in Firestore
+async function updateItemImagesStatus(sku, hasImages, imageCount = 0) {
+  try {
+    const { db } = initializeFirebase();
+    if (!db) {
+      console.warn('Firestore not initialized, skipping update');
+      return;
+    }
+    
+    const itemsDataQuery = await db.collection('items_data')
+      .where('sku', '==', sku)
+      .limit(1)
+      .get();
+    
+    if (!itemsDataQuery.empty) {
+      const updateData = {
+        images_matched: hasImages,
+        lastImageUpdate: admin.firestore.FieldValue.serverTimestamp()
+      };
+      
+      if (imageCount > 0) {
+        updateData.imageCount = imageCount;
+      }
+      
+      await itemsDataQuery.docs[0].ref.update(updateData);
+      console.log(`✅ Updated image status for SKU ${sku}: matched=${hasImages}, count=${imageCount}`);
+    } else {
+      console.warn(`⚠️ Item with SKU ${sku} not found in items_data`);
+    }
+  } catch (error) {
+    console.error(`❌ Error updating image status for SKU ${sku}:`, error.message);
+    // Don't throw - this is a non-critical operation
+  }
+}
+
 module.exports = {
   initializeFirebase,
   getProductImages,
@@ -466,5 +501,6 @@ module.exports = {
   getAvailableBrands,
   matchProductsWithImages,
   uploadProcessedImage,
-  saveItemToFirestore
+  saveItemToFirestore,
+  updateItemImagesStatus
 };

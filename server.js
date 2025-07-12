@@ -15,9 +15,8 @@ const {
     getAvailableBrands,
     matchProductsWithImages,
     uploadProcessedImage,
-    saveItemToFirestore
-    // getZohoAccessToken, // Function to get current access token (REMOVE from here)
-    // refreshZohoTokens // Function to refresh token (REMOVE from here)
+    saveItemToFirestore,
+    updateItemImagesStatus
 } = require('./firebase-integration'); // Adjust path as needed for your project structure
 
 // Import Zoho token management from zoho-auth.js
@@ -891,22 +890,13 @@ app.post('/api/workflow/match-images', async (req, res) => {
         
         // Force update the items_data collection to ensure images_matched is set
         const { db } = initializeFirebase();
-        if (db && result.products) {
+        if (result.products) {
             for (const productResult of result.products) {
                 if (productResult.matched && productResult.product.sku) {
                     try {
-                        const itemsQuery = await db.collection('items_data')
-                            .where('sku', '==', productResult.product.sku)
-                            .limit(1)
-                            .get();
-                        
-                        if (!itemsQuery.empty) {
-                            await itemsQuery.docs[0].ref.update({
-                                images_matched: true,
-                                imageCount: productResult.images.filter(img => !img.isVariant).length,
-                                lastImageMatch: admin.firestore.FieldValue.serverTimestamp()
-                            });
-                        }
+                        // Use the helper function to update image status
+                        const imageCount = productResult.images.filter(img => !img.isVariant).length;
+                        await updateItemImagesStatus(productResult.product.sku, true, imageCount);
                     } catch (updateError) {
                         console.error(`Failed to update images_matched for SKU ${productResult.product.sku}:`, updateError);
                     }
@@ -1097,17 +1087,8 @@ app.post('/api/firebase/batch-upload-images', upload.array('images', 50), async 
                         
                         // Update the item in Firestore to mark it has images
                         try {
-                            const itemsQuery = await db.collection('items_data')
-                                .where('sku', '==', sku)
-                                .limit(1)
-                                .get();
-                            
-                            if (!itemsQuery.empty) {
-                                await itemsQuery.docs[0].ref.update({
-                                    images_matched: true,
-                                    lastImageUpdate: admin.firestore.FieldValue.serverTimestamp()
-                                });
-                            }
+                            // Use the helper function to update image status
+                            await updateItemImagesStatus(sku, true);
                         } catch (updateError) {
                             console.error(`Failed to update Firestore for SKU ${sku}:`, updateError);
                         }
