@@ -31,7 +31,7 @@ async function cleanupDuplicateItems() {
       const docId = doc.id;
       const data = doc.data();
       
-      // Check if document ID is a numeric ID (like 310656000000263000)
+      // Check if document ID is a numeric ID (like 310656000000263000) - these are the duplicates to delete
       if (/^\d+$/.test(docId)) {
         try {
           await doc.ref.delete();

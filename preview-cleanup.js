@@ -34,7 +34,7 @@ async function previewCleanup() {
       const docId = doc.id;
       const data = doc.data();
       
-      // Check if document ID is a numeric ID (like 310656000000263000)
+      // Check if document ID is a numeric ID (like 310656000000263000) - these are the duplicates to delete
       if (/^\d+$/.test(docId)) {
         toDelete.push({
           id: docId,
