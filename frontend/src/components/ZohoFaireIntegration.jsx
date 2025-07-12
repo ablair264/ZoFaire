@@ -409,6 +409,14 @@ const ZohoFaireIntegration = () => {
       if (cachedData) {
         // Apply search filter on cached data if needed
         let filteredItems = cachedData.items;
+        
+        // SAFETY FILTER: Remove any items with UID starting with 310
+        filteredItems = filteredItems.filter(item => {
+          const itemId = String(item.item_id || item.id || '');
+          const sku = String(item.sku || '');
+          return !itemId.startsWith('310') && !sku.startsWith('310');
+        });
+        
         if (searchTerm) {
           const searchLower = searchTerm.toLowerCase();
           filteredItems = filteredItems.filter(item => {
@@ -447,9 +455,20 @@ const ZohoFaireIntegration = () => {
       }
       const data = await response.json();
       
+      // SAFETY FILTER: Remove any items with UID starting with 310 from the response
+      let safeItems = (data.items || []).filter(item => {
+        const itemId = String(item.item_id || item.id || '');
+        const sku = String(item.sku || '');
+        const shouldFilter = itemId.startsWith('310') || sku.startsWith('310');
+        if (shouldFilter) {
+          console.log(`Frontend filtering item with UID/SKU starting with 310: ${itemId || sku}`);
+        }
+        return !shouldFilter;
+      });
+      
       // Extract unique brands from the items
       const brandsSet = new Set();
-      data.items.forEach(item => {
+      safeItems.forEach(item => {
         if (item.brand_normalized && item.brand_normalized !== 'unknown') {
           brandsSet.add(item.brand || item.brand_normalized);
         }
@@ -457,10 +476,10 @@ const ZohoFaireIntegration = () => {
       const uniqueBrands = Array.from(brandsSet).sort();
       
       // Apply search filter if we didn't send it to server
-      let finalItems = data.items;
+      let finalItems = safeItems;
       if (!forceRefresh && searchTerm) {
         const searchLower = searchTerm.toLowerCase();
-        finalItems = data.items.filter(item => {
+        finalItems = safeItems.filter(item => {
           const nameMatch = String(item.name || '').toLowerCase().includes(searchLower);
           const skuMatch = String(item.sku || '').toLowerCase().includes(searchLower);
           const descriptionMatch = String(item.description || '').toLowerCase().includes(searchLower);
@@ -469,14 +488,14 @@ const ZohoFaireIntegration = () => {
       }
       
       setItems(finalItems);
-      setTotalCount(data.total || finalItems.length);
+      setTotalCount(finalItems.length); // Use filtered count
       setAvailableBrands(uniqueBrands);
       
-      // Cache the unfiltered results
+      // Cache the filtered results
       if (!searchTerm || forceRefresh) {
         firebaseCache.set(baseCacheKey, {
-          items: data.items,
-          total: data.total || data.items.length,
+          items: safeItems,
+          total: safeItems.length,
           brands: uniqueBrands
         }, 15 * 60 * 1000); // Cache for 15 minutes
       }
@@ -1149,57 +1168,57 @@ const ZohoFaireIntegration = () => {
             pl: { sm: 2 }, 
             pr: { xs: 1, sm: 1 },
             backgroundColor: alpha(theme.palette.primary.main, 0.05),
-            borderBottom: `1px solid ${theme.palette.divider}`
+            borderBottom: `1px solid ${theme.palette.divider}`,
+            minHeight: 64,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 2,
+            flexWrap: 'nowrap',
+            overflowX: 'auto',
+            '&::-webkit-scrollbar': {
+              height: 6,
+            },
+            '&::-webkit-scrollbar-track': {
+              backgroundColor: 'transparent',
+            },
+            '&::-webkit-scrollbar-thumb': {
+              backgroundColor: alpha(theme.palette.primary.main, 0.2),
+              borderRadius: 3,
+            }
           }}>
-            <Typography variant="h6" component="div" sx={{ flexGrow: 1, fontWeight: 600 }}>
+            {/* Title */}
+            <Typography variant="h6" component="div" sx={{ fontWeight: 600, flexShrink: 0, minWidth: 100 }}>
               Items ({items.length})
             </Typography>
             
-            <TextField
-              label="Search Items"
-              variant="outlined"
-              size="small"
-              value={searchTerm}
-              onChange={handleSearchChange}
-              sx={{ mr: 2, flexShrink: 0 }}
-            />
-            
-            <FormControlLabel
-              control={
-                <Checkbox
-                  checked={filterInactive}
-                  onChange={handleFilterInactiveChange}
-                  color="primary"
-                />
-              }
-              label="Active Items Only"
-              sx={{ mr: 2 }}
-            />
-            
-            <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', flexWrap: 'wrap' }}>
-              <Button
+            {/* Search and Filter Group */}
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, flexShrink: 0 }}>
+              <TextField
+                label="Search Items"
                 variant="outlined"
-                startIcon={<RefreshIcon />}
-                onClick={() => fetchItems(true, true)} // Force refresh
-                disabled={loading}
-              >
-                Refresh
-              </Button>
-              
-              <Button
-                variant="outlined"
-                startIcon={<DownloadIcon />}
-                onClick={() => {
-                  firebaseCache.clearAll();
-                  showSnackbar('Cache cleared!', 'info');
+                size="small"
+                value={searchTerm}
+                onChange={handleSearchChange}
+                InputProps={{
+                  startAdornment: <SearchIcon sx={{ mr: 1, color: 'action.active' }} />,
                 }}
-                disabled={loading}
-                title="Clear all cached data"
-              >
-                Clear Cache
-              </Button>
+                sx={{ width: 200 }}
+              />
               
-              <FormControl size="small" sx={{ minWidth: 180, mr: 2 }}>
+              <FormControlLabel
+                control={
+                  <Checkbox
+                    checked={filterInactive}
+                    onChange={handleFilterInactiveChange}
+                    color="primary"
+                    size="small"
+                  />
+                }
+                label="Active Only"
+                sx={{ mr: 0, whiteSpace: 'nowrap' }}
+              />
+              
+              <FormControl size="small" sx={{ minWidth: 150 }}>
                 <InputLabel id="brand-filter-label">Brand</InputLabel>
                 <Select
                   labelId="brand-filter-label"
@@ -1213,57 +1232,100 @@ const ZohoFaireIntegration = () => {
                   ))}
                 </Select>
               </FormControl>
+            </Box>
+            
+            {/* Spacer */}
+            <Box sx={{ flexGrow: 1 }} />
+            
+            {/* Action Buttons Group */}
+            <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', flexShrink: 0 }}>
+              <IconButton
+                color="primary"
+                onClick={() => fetchItems(true, true)}
+                disabled={loading}
+                title="Refresh"
+                sx={{ 
+                  border: `1px solid ${alpha(theme.palette.primary.main, 0.5)}`,
+                  '&:hover': {
+                    backgroundColor: alpha(theme.palette.primary.main, 0.1),
+                  }
+                }}
+              >
+                <RefreshIcon />
+              </IconButton>
               
               <Button
                 variant="outlined"
+                size="small"
+                startIcon={<DownloadIcon />}
+                onClick={() => {
+                  firebaseCache.clearAll();
+                  showSnackbar('Cache cleared!', 'info');
+                }}
+                disabled={loading}
+                title="Clear all cached data"
+                sx={{ whiteSpace: 'nowrap' }}
+              >
+                Clear Cache
+              </Button>
+              
+              <Divider orientation="vertical" flexItem sx={{ mx: 1 }} />
+              
+              <Button
+                variant="outlined"
+                size="small"
                 startIcon={<ImageIcon />}
                 onClick={matchAllImages}
                 disabled={loading || isMatching}
+                sx={{ whiteSpace: 'nowrap' }}
               >
                 Match Images
               </Button>
               
               <Button
                 variant="contained"
-                startIcon={<CloudSyncIcon />}
-                onClick={runCompleteSync}
-                disabled={loading || isMatching || syncStatus === 'running'}
-              >
-                {syncStatus === 'running' ? 'Syncing...' : 'Complete Sync'}
-              </Button>
-              
-              <Button
-                variant="contained"
+                size="small"
                 color="secondary"
                 startIcon={<AddPhotoIcon />}
                 onClick={() => setBatchUploadDialog(true)}
                 disabled={loading || isMatching}
+                sx={{ whiteSpace: 'nowrap' }}
               >
                 Batch Upload
               </Button>
-            </Box>
-            <Button
-              variant="contained"
-              color="primary"
-              onClick={handleCompleteSync}
-              disabled={loading} // Keep disabled while any loading is happening
-              startIcon={loading ? <CircularProgress size={20} color="inherit" /> : <CloudUploadIcon />}
-              sx={{ ml: 2 }}
-            >
-              {getSyncButtonText()}
-            </Button>
-            {selectedItems.size > 0 && (
+              
               <Button
                 variant="contained"
-                color="secondary"
-                startIcon={<UploadIcon />}
-                sx={{ ml: 2 }}
-                onClick={handleUploadToFaire}
-                disabled={loading}
+                size="small"
+                startIcon={loading ? <CircularProgress size={16} color="inherit" /> : <CloudSyncIcon />}
+                onClick={handleCompleteSync}
+                disabled={loading || isMatching}
+                sx={{ 
+                  whiteSpace: 'nowrap',
+                  minWidth: 140,
+                  backgroundColor: theme.palette.primary.main,
+                  '&:hover': {
+                    backgroundColor: theme.palette.primary.dark,
+                  }
+                }}
               >
-                Upload to Faire ({selectedItems.size})
+                {getSyncButtonText()}
               </Button>
-            )}
+              
+              {selectedItems.size > 0 && (
+                <Button
+                  variant="contained"
+                  size="small"
+                  color="success"
+                  startIcon={<UploadIcon />}
+                  onClick={handleUploadToFaire}
+                  disabled={loading}
+                  sx={{ whiteSpace: 'nowrap' }}
+                >
+                  Upload to Faire ({selectedItems.size})
+                </Button>
+              )}
+            </Box>
           </Toolbar>
 
           <TableContainer>

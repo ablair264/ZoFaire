@@ -283,6 +283,14 @@ app.get('/api/items', async (req, res) => {
 
         itemsSnapshot.forEach(doc => {
             try {
+                // ISSUE 4 FIX: Skip items where UID starts with 310 - check first before any processing
+                const docId = doc.id;
+                if (docId && docId.startsWith('310')) {
+                    console.log(`Filtering out item with UID starting with 310: ${docId}`);
+                    skippedItems++;
+                    return; // Skip this document entirely
+                }
+                
                 const itemData = doc.data();
                 
                 // Skip if no item data
@@ -291,16 +299,16 @@ app.get('/api/items', async (req, res) => {
                     return;
                 }
                 
-                // ISSUE 4 FIX: Skip items where UID starts with 310
-                if (doc.id && doc.id.startsWith('310')) {
-                    console.log(`Skipping item with UID starting with 310: ${doc.id}`);
+                // Also check if item_id field starts with 310
+                if (itemData.item_id && String(itemData.item_id).startsWith('310')) {
+                    console.log(`Filtering out item with item_id starting with 310: ${itemData.item_id}`);
                     skippedItems++;
                     return;
                 }
                 
-                // Also check if item_id starts with 310
-                if (itemData.item_id && String(itemData.item_id).startsWith('310')) {
-                    console.log(`Skipping item with item_id starting with 310: ${itemData.item_id}`);
+                // Additional check: if SKU starts with 310
+                if (itemData.sku && String(itemData.sku).startsWith('310')) {
+                    console.log(`Filtering out item with SKU starting with 310: ${itemData.sku}`);
                     skippedItems++;
                     return;
                 }
@@ -889,7 +897,6 @@ app.post('/api/workflow/match-images', async (req, res) => {
         const result = await matchProductsWithImages(items);
         
         // Force update the items_data collection to ensure images_matched is set
-        const { db } = initializeFirebase();
         if (result.products) {
             for (const productResult of result.products) {
                 if (productResult.matched && productResult.product.sku) {
