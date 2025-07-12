@@ -153,6 +153,20 @@ function SlideTransition(props) {
   return <Slide {...props} direction="left" />;
 }
 
+// --- STYLED COMPONENTS (for better UI feedback) ---
+const StyledTableRow = styled(TableRow)(({ theme }) => ({
+  '&:nth-of-type(odd)': {
+    backgroundColor: alpha(theme.palette.action.hover, 0.02),
+  },
+  '&:hover': {
+    backgroundColor: alpha(theme.palette.primary.main, 0.1),
+  },
+  // hide last border
+  '&:last-child td, &:last-child th': {
+    border: 0,
+  },
+}));
+
 // Normalize brand names for Firebase paths (remove special characters, umlauts, etc.)
 const normalizeBrandName = (brand) => {
   if (!brand) return 'unknown';
@@ -256,19 +270,26 @@ const BrandAvatar = ({ brand, size = 24 }) => {
 
 const ZohoFaireIntegration = () => {
   const theme = useTheme();
-  // State management
-  const [zohoItems, setZohoItems] = useState([]);
-  const [selectedItems, setSelectedItems] = useState(new Set());
-  const [searchTerm, setSearchTerm] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [syncStatus, setSyncStatus] = useState('idle'); // 'idle', 'fetchingZoho', 'matchingImages', 'uploadingToFaire', 'complete', 'error'
+  const [items, setItems] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const [page, setPage] = useState(0);
-  const [rowsPerPage, setRowsPerPage] = useState(200); // Use max page size for Zoho API
-  const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'info' });
-  const [filterInactive, setFilterInactive] = useState(true); // <--- Changed default to true (Active Items Only)
-  const [zohoItemsFetchedCount, setZohoItemsFetchedCount] = useState(0); // <--- NEW State for item count
-  const [selectedItem, setSelectedItem] = useState(null);
+  const [rowsPerPage, setRowsPerPage] = useState(25);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [selected, setSelected] = useState([]);
+  
+  // Fixed state variables
+  const [selectedBrand, setSelectedBrand] = useState('');
+  const [availableBrands, setAvailableBrands] = useState([]);
+  const [totalCount, setTotalCount] = useState(0);
+  const [selectedItems, setSelectedItems] = useState(new Set());
+  const [filterInactive, setFilterInactive] = useState(false);
   const [detailDialogOpen, setDetailDialogOpen] = useState(false);
+  const [syncStatus, setSyncStatus] = useState('idle');
+  const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'info' });
+
+  const [selectedItem, setSelectedItem] = useState(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
   
   // Image Management states
   const [selectedProduct, setSelectedProduct] = useState(null);
@@ -291,7 +312,6 @@ const ZohoFaireIntegration = () => {
   const [uploadProgress, setUploadProgress] = useState(0);
   
   // Batch processing states
-  const [selectedManufacturer, setSelectedManufacturer] = useState('all');
   const [manufacturers, setManufacturers] = useState([]);
   const [matchProgress, setMatchProgress] = useState({ current: 0, total: 0 });
   const [isMatching, setIsMatching] = useState(false);
@@ -376,19 +396,31 @@ const ZohoFaireIntegration = () => {
     return cleanItem;
   };
 
-  // Fetch Items from items_data collection
+  // Fetch Items from items_data collection with improved caching
   const fetchItems = useCallback(async (showLoading = true, forceRefresh = false) => {
     if (showLoading) setLoading(true);
     
-    // Create cache key based on current filters
-    const cacheKey = `items_${page}_${rowsPerPage}_${searchTerm}_${filterInactive}`;
+    // Create base cache key without search term for better caching
+    const baseCacheKey = `items_${page}_${rowsPerPage}_${selectedBrand}_${filterInactive}`;
     
     // Try to get from cache first (unless force refresh)
-    if (!forceRefresh && !searchTerm) { // Don't cache search results
-      const cachedData = firebaseCache.get(cacheKey);
+    if (!forceRefresh) {
+      const cachedData = firebaseCache.get(baseCacheKey);
       if (cachedData) {
-        setZohoItems(cachedData.items);
-        setZohoItemsFetchedCount(cachedData.total);
+        // Apply search filter on cached data if needed
+        let filteredItems = cachedData.items;
+        if (searchTerm) {
+          const searchLower = searchTerm.toLowerCase();
+          filteredItems = filteredItems.filter(item => {
+            const nameMatch = String(item.name || '').toLowerCase().includes(searchLower);
+            const skuMatch = String(item.sku || '').toLowerCase().includes(searchLower);
+            const descriptionMatch = String(item.description || '').toLowerCase().includes(searchLower);
+            return nameMatch || skuMatch || descriptionMatch;
+          });
+        }
+        setItems(filteredItems);
+        setTotalCount(searchTerm ? filteredItems.length : cachedData.total);
+        setAvailableBrands(cachedData.brands || []);
         if (showLoading) setLoading(false);
         return;
       }
@@ -398,11 +430,13 @@ const ZohoFaireIntegration = () => {
       const params = new URLSearchParams({
         page: page + 1,
         per_page: rowsPerPage,
-        sort_column: 'name', // Default sort
-        sort_order: 'asc', // Default sort order
-        filterInactive: filterInactive // Send boolean as string 'true' or 'false'
+        sort_column: 'name',
+        sort_order: 'asc',
+        filterInactive: filterInactive
       });
-      if (searchTerm) {
+      
+      // Don't include search in API call - we'll filter cached results instead
+      if (forceRefresh && searchTerm) {
         params.append('search_text', searchTerm);
       }
 
@@ -413,18 +447,37 @@ const ZohoFaireIntegration = () => {
       }
       const data = await response.json();
       
-      // Clean all items before setting them
-      const cleanedItems = (data.items || []).map(cleanItemData).filter(Boolean);
-      setZohoItems(cleanedItems);
+      // Extract unique brands from the items
+      const brandsSet = new Set();
+      data.items.forEach(item => {
+        if (item.brand_normalized && item.brand_normalized !== 'unknown') {
+          brandsSet.add(item.brand || item.brand_normalized);
+        }
+      });
+      const uniqueBrands = Array.from(brandsSet).sort();
       
-      // Use total count from response
-      setZohoItemsFetchedCount(data.total || cleanedItems.length);
+      // Apply search filter if we didn't send it to server
+      let finalItems = data.items;
+      if (!forceRefresh && searchTerm) {
+        const searchLower = searchTerm.toLowerCase();
+        finalItems = data.items.filter(item => {
+          const nameMatch = String(item.name || '').toLowerCase().includes(searchLower);
+          const skuMatch = String(item.sku || '').toLowerCase().includes(searchLower);
+          const descriptionMatch = String(item.description || '').toLowerCase().includes(searchLower);
+          return nameMatch || skuMatch || descriptionMatch;
+        });
+      }
       
-      // Cache the results (only for non-search queries)
-      if (!searchTerm) {
-        firebaseCache.set(cacheKey, {
-          items: cleanedItems,
-          total: data.total || cleanedItems.length
+      setItems(finalItems);
+      setTotalCount(data.total || finalItems.length);
+      setAvailableBrands(uniqueBrands);
+      
+      // Cache the unfiltered results
+      if (!searchTerm || forceRefresh) {
+        firebaseCache.set(baseCacheKey, {
+          items: data.items,
+          total: data.total || data.items.length,
+          brands: uniqueBrands
         }, 15 * 60 * 1000); // Cache for 15 minutes
       }
       
@@ -432,16 +485,16 @@ const ZohoFaireIntegration = () => {
     } catch (error) {
       console.error('Error fetching items:', error);
       showSnackbar(`Error fetching items: ${error.message}`, 'error');
-      setZohoItemsFetchedCount(0); // Reset count on error
+      setTotalCount(0);
     } finally {
       if (showLoading) setLoading(false);
     }
-  }, [page, rowsPerPage, searchTerm, filterInactive, showSnackbar]);
+  }, [page, rowsPerPage, selectedBrand, filterInactive, searchTerm, showSnackbar]);
 
   // Load items on mount and when dependencies change
   useEffect(() => {
     fetchItems();
-  }, [page, rowsPerPage, searchTerm, filterInactive]);
+  }, [page, rowsPerPage, searchTerm, filterInactive, selectedBrand]);
 
   // Load Firebase brands and extract manufacturers for ImageManagement
   useEffect(() => {
@@ -450,12 +503,12 @@ const ZohoFaireIntegration = () => {
 
   // Extract unique manufacturers from items
   useEffect(() => {
-    if (zohoItems && zohoItems.length > 0) {
+    if (items && items.length > 0) {
       // Create a map to store unique manufacturers with their original names
       const manufacturerMap = new Map();
       
-      zohoItems.forEach(item => {
-        const original = item.manufacturer || item.brand;
+      items.forEach(item => {
+        const original = item.brand || item.manufacturer;
         if (original) {
           const normalized = normalizeBrandName(original);
           if (normalized !== 'unknown' && !manufacturerMap.has(normalized)) {
@@ -475,7 +528,7 @@ const ZohoFaireIntegration = () => {
       
       setManufacturers(uniqueManufacturers);
     }
-  }, [zohoItems]);
+  }, [items]);
 
   // Create manufacturerOptions from manufacturers data
   const manufacturerOptions = useMemo(() => {
@@ -505,7 +558,7 @@ const ZohoFaireIntegration = () => {
 
   const handleToggleSelectAll = (event) => {
     if (event.target.checked) {
-      const newSelected = new Set(zohoItems.map((n) => n.item_id));
+      const newSelected = new Set(items.map((n) => n.item_id));
       setSelectedItems(newSelected);
       showSnackbar(`Selected all ${newSelected.size} items.`, 'info');
     } else {
@@ -592,26 +645,24 @@ const ZohoFaireIntegration = () => {
       }
     } catch (error) {
       console.error('Error loading Firebase brands:', error);
-      setSnackbar({ open: true, message: 'Failed to load brands from Firebase', severity: 'error' });
+      showSnackbar('Failed to load brands from Firebase', 'error');
     }
   };
 
   const matchAllImages = async () => {
-    const itemsToMatch = selectedManufacturer === 'all' 
-      ? zohoItems 
-      : zohoItems.filter(item => 
-          normalizeBrandName(item.manufacturer || item.brand) === selectedManufacturer
-        );
+    const itemsToMatch = selectedBrand === 'all' || !selectedBrand
+      ? items 
+      : items.filter(item => item.brand_normalized === normalizeBrandName(selectedBrand));
 
     if (itemsToMatch.length === 0) {
-      setSnackbar({ open: true, message: 'No products to match', severity: 'warning' });
+      showSnackbar('No products to match', 'warning');
       return;
     }
 
     setIsMatching(true);
     setMatchProgress({ current: 0, total: itemsToMatch.length });
     
-    const BATCH_SIZE = 50; // Process 50 items at a time
+    const BATCH_SIZE = 50;
     const batches = Math.ceil(itemsToMatch.length / BATCH_SIZE);
     
     const allResults = {
@@ -648,18 +699,17 @@ const ZohoFaireIntegration = () => {
         setMatchProgress({ current: (i + 1) * BATCH_SIZE, total: itemsToMatch.length });
       }
 
-      setSnackbar({ 
-        open: true, 
-        message: `Image matching complete! ${allResults.matched} matched, ${allResults.notMatched} not found, ${allResults.errors} errors`, 
-        severity: allResults.errors > 0 ? 'warning' : 'success' 
-      });
+      showSnackbar(
+        `Image matching complete! ${allResults.matched} matched, ${allResults.notMatched} not found, ${allResults.errors} errors`, 
+        allResults.errors > 0 ? 'warning' : 'success'
+      );
       
-      // Refresh items to show updated image status
-      fetchItems();
+      // IMPORTANT: Force refresh items to show updated image status
+      await fetchItems(true, true); // Force refresh with cache bypass
       
     } catch (error) {
       console.error('Error matching images:', error);
-      setSnackbar({ open: true, message: `Image matching failed: ${error.message}`, severity: 'error' });
+      showSnackbar(`Image matching failed: ${error.message}`, 'error');
     } finally {
       setIsMatching(false);
       setMatchProgress({ current: 0, total: 0 });
@@ -711,7 +761,7 @@ const ZohoFaireIntegration = () => {
       if (response.ok) {
         const data = await response.json();
         if (data.success) {
-          setSnackbar({ open: true, message: 'Images uploaded successfully!', severity: 'success' });
+          showSnackbar('Images uploaded successfully!', 'success');
           setUploadDialog(false);
           setSelectedFiles([]);
           getProductImages(selectedProduct);
@@ -722,7 +772,7 @@ const ZohoFaireIntegration = () => {
       }
     } catch (error) {
       console.error('Error uploading images:', error);
-      setSnackbar({ open: true, message: `Upload failed: ${error.message}`, severity: 'error' });
+      showSnackbar(`Upload failed: ${error.message}`, 'error');
     } finally {
       setUploading(false);
       setUploadProgress(0);
@@ -741,19 +791,18 @@ const ZohoFaireIntegration = () => {
 
       if (response.ok) {
         const data = await response.json();
-        setSnackbar({ 
-          open: true, 
-          message: `Complete sync finished! ${data.summary?.matched || 0} items matched with images.`, 
-          severity: 'success' 
-        });
-        fetchItems(true); // Refresh the items list
+        showSnackbar(
+          `Complete sync finished! ${data.summary?.matched || 0} items matched with images.`, 
+          'success'
+        );
+        await fetchItems(true, true); // Force refresh the items list
       } else {
         const errorData = await response.json();
         throw new Error(errorData.message || 'Complete sync failed');
       }
     } catch (error) {
       console.error('Error in complete sync:', error);
-      setSnackbar({ open: true, message: `Complete sync failed: ${error.message}`, severity: 'error' });
+      showSnackbar(`Complete sync failed: ${error.message}`, 'error');
     } finally {
       setSyncStatus('idle');
     }
@@ -777,12 +826,12 @@ const ZohoFaireIntegration = () => {
 
   const handleBatchUpload = async () => {
     if (batchFiles.length === 0) {
-      setSnackbar({ open: true, message: 'Please select images to upload', severity: 'warning' });
+      showSnackbar('Please select images to upload', 'warning');
       return;
     }
     
     if (!batchSelectedBrand) {
-      setSnackbar({ open: true, message: 'Please select a brand', severity: 'warning' });
+      showSnackbar('Please select a brand', 'warning');
       return;
     }
     
@@ -806,11 +855,10 @@ const ZohoFaireIntegration = () => {
       if (response.ok) {
         const data = await response.json();
         if (data.success) {
-          setSnackbar({
-            open: true,
-            message: `Batch upload complete! ${data.summary.successful} succeeded, ${data.summary.failed} failed`,
-            severity: data.summary.failed > 0 ? 'warning' : 'success'
-          });
+          showSnackbar(
+            `Batch upload complete! ${data.summary.successful} succeeded, ${data.summary.failed} failed`,
+            data.summary.failed > 0 ? 'warning' : 'success'
+          );
           
           // Close dialog and reset
           setBatchUploadDialog(false);
@@ -821,7 +869,7 @@ const ZohoFaireIntegration = () => {
           loadFirebaseBrands();
           
           // If we're viewing this brand, refresh the image matching
-          if (selectedManufacturer === normalizeBrandName(batchSelectedBrand)) {
+          if (selectedBrand === normalizeBrandName(batchSelectedBrand)) {
             matchAllImages();
           }
         }
@@ -831,79 +879,71 @@ const ZohoFaireIntegration = () => {
       }
     } catch (error) {
       console.error('Error in batch upload:', error);
-      setSnackbar({ open: true, message: `Batch upload failed: ${error.message}`, severity: 'error' });
+      showSnackbar(`Batch upload failed: ${error.message}`, 'error');
     } finally {
       setBatchUploading(false);
       setBatchUploadProgress({ current: 0, total: 0 });
     }
   };
 
-  const getManufacturerName = (item) => {
-    if (!item.manufacturer) return '';
-    if (typeof item.manufacturer === 'string') return item.manufacturer;
-    if (typeof item.manufacturer === 'object' && item.manufacturer.manufacturer_name)
-      return item.manufacturer.manufacturer_name;
-    return '';
-  };
-
   const filteredItems = useMemo(() => {
-    return zohoItems.filter(item => {
+    return items.filter(item => {
       const itemName = String(item.name || '');
       const itemSku = String(item.sku || '');
-      const manufacturerName = getManufacturerName(item);
+      const itemDescription = String(item.description || '');
       const searchLower = String(searchTerm || '').toLowerCase();
       
-      // Manufacturer filter: if no manufacturer selected, show all; otherwise match exactly
-      const manufacturerFilter = !selectedManufacturer || selectedManufacturer === '' || 
-        manufacturerName.toLowerCase() === selectedManufacturer.toLowerCase();
+      // Search filter
+      const searchMatch = !searchTerm || 
+        itemName.toLowerCase().includes(searchLower) ||
+        itemSku.toLowerCase().includes(searchLower) ||
+        itemDescription.toLowerCase().includes(searchLower);
       
-      return (
-        (itemName.toLowerCase().includes(searchLower) ||
-        itemSku.toLowerCase().includes(searchLower)) &&
-        manufacturerFilter
-      );
+      // Brand filter using brand_normalized
+      const brandMatch = !selectedBrand || selectedBrand === '' || 
+        (item.brand_normalized && item.brand_normalized === normalizeBrandName(selectedBrand));
+      
+      return searchMatch && brandMatch;
     });
-  }, [zohoItems, searchTerm, selectedManufacturer]);
+  }, [items, searchTerm, selectedBrand]);
 
   const handleCompleteSync = async () => {
     setLoading(true);
-    setSyncStatus('fetchingZoho'); // Set initial status
+    setSyncStatus('fetchingZoho');
     showSnackbar('Starting complete sync workflow...', 'info');
 
     try {
-      const response = await fetch(`${API_BASE_URL}/workflow/complete-sync`, { method: 'POST' });
+      const response = await fetch(`${API_BASE_URL}/workflow/complete-sync`, { 
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+      });
 
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.error || errorData.message || 'Complete sync failed on backend.');
+        throw new Error(errorData.error || errorData.message || 'Complete sync failed');
       }
 
       const data = await response.json();
 
       if (data.summary) {
-          const { zohoItemsFetched, matchedItems, itemsUploadedToFaire } = data.summary;
-          showSnackbar(
-              `Sync completed successfully! Fetched ${zohoItemsFetched} Zoho items, matched ${matchedItems} with images, and completed Faire upload for ${itemsUploadedToFaire} items.`,
-              'success'
-          );
-          setZohoItemsFetchedCount(zohoItemsFetched); // Update count after successful sync
+        const { zohoItemsFetched, matchedItems, itemsUploadedToFaire } = data.summary;
+        showSnackbar(
+          `Sync completed! Fetched ${zohoItemsFetched} items, matched ${matchedItems} with images.`,
+          'success'
+        );
+        setTotalCount(zohoItemsFetched);
       } else {
-          showSnackbar(data.message, 'success');
+        showSnackbar(data.message || 'Sync completed', 'success');
       }
 
-      setSyncStatus('complete'); // Set final status
-      fetchItems(true); // Refresh items after successful sync
+      setSyncStatus('complete');
+      // Force refresh with cache clear
+      firebaseCache.clearAll();
+      await fetchItems(true, true);
     } catch (error) {
       console.error('Complete sync failed:', error);
-      let errorMessage = 'Complete sync failed.';
-      if (error.message.includes('Invalid value passed for filter_by')) {
-          errorMessage = 'Sync failed: Unable to fetch items from Zoho due to an invalid status filter. Please ensure the backend is configured correctly.';
-      } else {
-          errorMessage = `Complete sync failed: ${error.message}`;
-      }
-      showSnackbar(errorMessage, 'error');
-      setSyncStatus('error'); // Set error status
-      setZohoItemsFetchedCount(0); // Reset count on error
+      showSnackbar(`Sync failed: ${error.message}`, 'error');
+      setSyncStatus('error');
     } finally {
       setLoading(false);
     }
@@ -933,7 +973,7 @@ const ZohoFaireIntegration = () => {
     setLoading(true);
     showSnackbar(`Uploading ${selectedItems.size} items to Faire...`, 'info');
     try {
-      const selected = zohoItems.filter(item => selectedItems.has(item.item_id));
+      const selected = items.filter(item => selectedItems.has(item.item_id));
       const response = await fetch(`${API_BASE_URL}/faire/upload`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1112,7 +1152,7 @@ const ZohoFaireIntegration = () => {
             borderBottom: `1px solid ${theme.palette.divider}`
           }}>
             <Typography variant="h6" component="div" sx={{ flexGrow: 1, fontWeight: 600 }}>
-              Items ({zohoItems.length})
+              Items ({items.length})
             </Typography>
             
             <TextField
@@ -1160,16 +1200,16 @@ const ZohoFaireIntegration = () => {
               </Button>
               
               <FormControl size="small" sx={{ minWidth: 180, mr: 2 }}>
-                <InputLabel id="manufacturer-filter-label">Manufacturer</InputLabel>
+                <InputLabel id="brand-filter-label">Brand</InputLabel>
                 <Select
-                  labelId="manufacturer-filter-label"
-                  value={selectedManufacturer}
-                  label="Manufacturer"
-                  onChange={e => setSelectedManufacturer(e.target.value)}
+                  labelId="brand-filter-label"
+                  value={selectedBrand}
+                  label="Brand"
+                  onChange={e => setSelectedBrand(e.target.value)}
                 >
-                  <MenuItem value="">All</MenuItem>
-                  {manufacturerOptions.filter(opt => opt).map(opt => (
-                    <MenuItem key={opt} value={opt}>{opt}</MenuItem>
+                  <MenuItem value="">All Brands</MenuItem>
+                  {availableBrands.map(brand => (
+                    <MenuItem key={brand} value={brand}>{brand}</MenuItem>
                   ))}
                 </Select>
               </FormControl>
@@ -1243,8 +1283,8 @@ const ZohoFaireIntegration = () => {
                   <TableCell padding="checkbox">
                     <Checkbox
                       onChange={handleToggleSelectAll}
-                      checked={selectedItems.size === zohoItems.length && zohoItems.length > 0}
-                      indeterminate={selectedItems.size > 0 && selectedItems.size < zohoItems.length}
+                      checked={selectedItems.size === items.length && items.length > 0}
+                      indeterminate={selectedItems.size > 0 && selectedItems.size < items.length}
                     />
                   </TableCell>
                   <TableCell 
@@ -1338,8 +1378,9 @@ const ZohoFaireIntegration = () => {
                           </TableCell>
                           <TableCell>
                             <Chip
-                              label={item.images_matched ? "Has images" : "No images"}
+                              label={item.images_matched ? `Has images (${item.imageCount || 0})` : "No images"}
                               color={item.images_matched ? "success" : "warning"}
+                              size="small"
                             />
                           </TableCell>
                           <TableCell align="center">
@@ -1424,7 +1465,7 @@ const ZohoFaireIntegration = () => {
           <TablePagination
             rowsPerPageOptions={[50, 100, 200]}
             component="div"
-            count={zohoItemsFetchedCount}
+            count={totalCount}
             rowsPerPage={rowsPerPage}
             page={page}
             onPageChange={handleChangePage}

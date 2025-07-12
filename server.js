@@ -262,58 +262,179 @@ app.use(async (req, res, next) => {
 
 
 // NEW: Zoho Items API Endpoint
-app.get('/api/zoho/items', async (req, res) => {
+app.get('/api/items', async (req, res) => {
     try {
-        const accessToken = await getZohoAccessToken(); // Get the valid access token
-        if (!accessToken) {
-            return res.status(401).json({ message: 'Zoho access token not available for fetching items.' });
+        const { db } = initializeFirebase();
+        if (!db) {
+            throw new Error('Firebase not initialized');
         }
 
-        const { page, per_page, sort_column, sort_order, search_text, filterInactive } = req.query;
+        // Get query parameters
+        const page = parseInt(req.query.page) || 1;
+        const perPage = parseInt(req.query.per_page) || 50;
+        const sortColumn = req.query.sort_column || 'name';
+        const sortOrder = req.query.sort_order || 'asc';
+        const filterInactive = req.query.filterInactive === 'true';
+        const searchText = req.query.search_text || '';
 
-        // Map sort_order from frontend to Zoho API ('A' or 'D')
-        let zohoSortOrder = 'A'; // default
-        if (sort_order === 'desc') zohoSortOrder = 'D';
-        else if (sort_order === 'asc') zohoSortOrder = 'A';
+        // Get all items from items_data collection
+        const itemsSnapshot = await db.collection('items_data').get();
+        let items = [];
+        let skippedItems = 0;
 
-        const params = {
-            organization_id: ZOHO_ORGANIZATION_ID,
-            page: page || 1,
-            per_page: per_page || 200, // Increased default to 200 (Zoho's max)
-            sort_column: sort_column || 'name',
-            sort_order: zohoSortOrder
-        };
+        itemsSnapshot.forEach(doc => {
+            try {
+                const itemData = doc.data();
+                
+                // Skip if no item data
+                if (!itemData) {
+                    skippedItems++;
+                    return;
+                }
+                
+                // ISSUE 4 FIX: Skip items where UID starts with 310
+                if (doc.id && doc.id.startsWith('310')) {
+                    console.log(`Skipping item with UID starting with 310: ${doc.id}`);
+                    skippedItems++;
+                    return;
+                }
+                
+                // Also check if item_id starts with 310
+                if (itemData.item_id && String(itemData.item_id).startsWith('310')) {
+                    console.log(`Skipping item with item_id starting with 310: ${itemData.item_id}`);
+                    skippedItems++;
+                    return;
+                }
+                
+                // ISSUE 3 FIX: Extract and normalize brand properly
+                let brand_normalized = itemData.brand_normalized;
+                let brandDisplay = '';
+                
+                if (!brand_normalized) {
+                    // Try to get brand from various sources
+                    let brandSource = itemData.manufacturer || itemData.brand || '';
+                    
+                    // If manufacturer is an object/map, extract manufacturer_name
+                    if (brandSource && typeof brandSource === 'object' && brandSource.manufacturer_name) {
+                        brandDisplay = brandSource.manufacturer_name;
+                        brand_normalized = normalizeBrandName(brandSource.manufacturer_name);
+                    } else if (typeof brandSource === 'string') {
+                        brandDisplay = brandSource;
+                        brand_normalized = normalizeBrandName(brandSource);
+                    } else {
+                        brandDisplay = 'Unknown';
+                        brand_normalized = 'unknown';
+                    }
+                } else {
+                    // If we have brand_normalized, try to get display name
+                    brandDisplay = itemData.brand || itemData.manufacturer || brand_normalized;
+                    if (typeof brandDisplay === 'object' && brandDisplay.manufacturer_name) {
+                        brandDisplay = brandDisplay.manufacturer_name;
+                    }
+                }
+                
+                // Filter out items with manufacturer 'service' or 'goods'
+                if (brand_normalized === 'service' || brand_normalized === 'goods') {
+                    skippedItems++;
+                    return;
+                }
 
-        if (search_text) {
-            params.search_text = search_text;
-        }
+                // Filter by status if filterInactive is true
+                if (filterInactive && itemData.status !== 'active') {
+                    skippedItems++;
+                    return;
+                }
 
-        // Correctly map frontend 'filterInactive' (boolean string) to Zoho API 'status'
-        if (filterInactive === 'true') {
-            params.status = 'active'; // Only fetch active items
-        }
-        // If filterInactive is 'false' or not provided, we omit the status parameter
-        // to fetch all items (active and inactive) from Zoho.
+                // Filter by search text
+                if (searchText) {
+                    const searchLower = searchText.toLowerCase();
+                    const nameMatch = String(itemData.name || '').toLowerCase().includes(searchLower);
+                    const skuMatch = String(itemData.sku || '').toLowerCase().includes(searchLower);
+                    const descriptionMatch = String(itemData.description || '').toLowerCase().includes(searchLower);
+                    
+                    if (!nameMatch && !skuMatch && !descriptionMatch) {
+                        skippedItems++;
+                        return;
+                    }
+                }
 
-        const response = await axios.get(`${ZOHO_BASE_URL}/items`, {
-            headers: {
-                'Authorization': `Zoho-oauthtoken ${accessToken}`
-            },
-            params: params
+                // Transform to match the expected format
+                const cleanItem = {
+                    item_id: itemData.item_id || doc.id,
+                    sku: itemData.sku,
+                    name: itemData.name || itemData.item_name,
+                    description: itemData.description,
+                    brand: brandDisplay, // Display name for UI
+                    brand_normalized: brand_normalized, // Normalized for filtering
+                    rate: itemData.rate,
+                    purchase_rate: itemData.purchase_rate,
+                    status: itemData.status,
+                    available_stock: itemData.available_stock,
+                    stock_on_hand: itemData.stock_on_hand,
+                    created_time: itemData.created_time,
+                    last_modified_time: itemData.last_modified_time,
+                    product_type: itemData.product_type,
+                    item_type: itemData.item_type,
+                    images_matched: itemData.images_matched || false,
+                    images: itemData.images || [],
+                    imageCount: itemData.imageCount || 0
+                };
+                
+                items.push(cleanItem);
+            } catch (itemError) {
+                console.error(`Error processing item ${doc.id}:`, itemError);
+                skippedItems++;
+            }
         });
 
-        res.json(response.data); // Zoho API typically returns { items: [], page_context: {} }
+        // Sort items
+        items.sort((a, b) => {
+            let aVal = a[sortColumn] || '';
+            let bVal = b[sortColumn] || '';
+            
+            // Handle numeric values
+            if (typeof aVal === 'number' && typeof bVal === 'number') {
+                return sortOrder === 'asc' ? aVal - bVal : bVal - aVal;
+            }
+            
+            // Handle string values
+            aVal = String(aVal).toLowerCase();
+            bVal = String(bVal).toLowerCase();
+            
+            if (sortOrder === 'asc') {
+                return aVal.localeCompare(bVal);
+            } else {
+                return bVal.localeCompare(aVal);
+            }
+        });
+
+        // Apply pagination
+        const total = items.length;
+        const startIndex = (page - 1) * perPage;
+        const endIndex = startIndex + perPage;
+        const paginatedItems = items.slice(startIndex, endIndex);
+
+        console.log(`Fetched ${paginatedItems.length} items from items_data collection (page ${page}, total ${total}, skipped ${skippedItems})`);
+        
+        res.json({
+            success: true,
+            items: paginatedItems,
+            total: total,
+            page: page,
+            per_page: perPage,
+            total_pages: Math.ceil(total / perPage)
+        });
+
     } catch (error) {
-        console.error('Error fetching Zoho items:', error.response ? error.response.data : error.message);
-        let errorMessage = 'Failed to fetch Zoho items.';
-        if (error.response && error.response.data && error.response.data.message) {
-            errorMessage = error.response.data.message;
-        } else if (error.message.includes('status code 401')) {
-            errorMessage = 'Unauthorized. Please re-authorize Zoho.';
-        }
-        res.status(error.response ? error.response.status : 500).json({ message: errorMessage });
+        console.error('Error fetching items from items_data:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to fetch items from items_data',
+            error: error.message
+        });
     }
 });
+
 
 // NEW: Complete Sync Workflow Endpoint
 app.post('/api/workflow/complete-sync', async (req, res) => {
@@ -764,7 +885,35 @@ app.post('/api/workflow/match-images', async (req, res) => {
         if (!Array.isArray(items) || items.length === 0) {
             return res.status(400).json({ success: false, message: 'No items provided for image matching.' });
         }
+        
+        // Run the matching process
         const result = await matchProductsWithImages(items);
+        
+        // Force update the items_data collection to ensure images_matched is set
+        const { db } = initializeFirebase();
+        if (db && result.products) {
+            for (const productResult of result.products) {
+                if (productResult.matched && productResult.product.sku) {
+                    try {
+                        const itemsQuery = await db.collection('items_data')
+                            .where('sku', '==', productResult.product.sku)
+                            .limit(1)
+                            .get();
+                        
+                        if (!itemsQuery.empty) {
+                            await itemsQuery.docs[0].ref.update({
+                                images_matched: true,
+                                imageCount: productResult.images.filter(img => !img.isVariant).length,
+                                lastImageMatch: admin.firestore.FieldValue.serverTimestamp()
+                            });
+                        }
+                    } catch (updateError) {
+                        console.error(`Failed to update images_matched for SKU ${productResult.product.sku}:`, updateError);
+                    }
+                }
+            }
+        }
+        
         res.json({ success: true, ...result });
     } catch (error) {
         console.error('Error in /api/workflow/match-images:', error);
@@ -853,30 +1002,34 @@ app.post('/api/firebase/batch-upload-images', upload.array('images', 50), async 
         
         console.log(`Batch upload: Processing ${req.files.length} images for brand: ${brand} (normalized: ${normalizedBrand})`);
 
-        // Create temp directories
-        const tempInputDir = path.join(__dirname, 'uploads', 'batch-input', Date.now().toString());
-        const tempOutputDir = path.join(__dirname, 'uploads', 'batch-output', Date.now().toString());
-        await fs.mkdir(tempInputDir, { recursive: true });
+        // Create temp directories with proper structure for Python script
+        const timestamp = Date.now().toString();
+        const tempInputDir = path.join(__dirname, 'uploads', 'batch-input', timestamp);
+        const brandInputDir = path.join(tempInputDir, normalizedBrand); // Create brand subfolder
+        const tempOutputDir = path.join(__dirname, 'uploads', 'batch-output', timestamp);
+        
+        await fs.mkdir(brandInputDir, { recursive: true }); // Create brand subfolder
         await fs.mkdir(tempOutputDir, { recursive: true });
 
         const processedResults = [];
         const failedUploads = [];
 
         try {
-            // Move uploaded files to temp input directory with proper extensions
+            // Move uploaded files to brand subfolder with original names
             for (const file of req.files) {
-                const ext = path.extname(file.originalname) || '.jpg';
-                const newPath = path.join(tempInputDir, `${path.basename(file.filename)}${ext}`);
+                const originalExt = path.extname(file.originalname) || '.jpg';
+                const originalBasename = path.basename(file.originalname, originalExt);
+                // Keep original filename structure for SKU extraction
+                const newPath = path.join(brandInputDir, `${originalBasename}${originalExt}`);
                 await fs.rename(file.path, newPath);
             }
 
-            // Run all-in-one-processor.py on the batch
+            // Run all-in-one-processor.py with correct structure
             const scriptPath = path.join(__dirname, 'all-in-one-processor.py');
             const args = [
                 scriptPath,
-                '--input', tempInputDir,
-                '--output', tempOutputDir,
-                '--brand', normalizedBrand, // Use normalized brand name
+                tempInputDir, // Now contains brand subfolder as expected
+                tempOutputDir,
                 '--padding', '50',
                 '--quality', '85'
             ];
@@ -911,39 +1064,65 @@ app.post('/api/firebase/batch-upload-images', upload.array('images', 50), async 
                 });
             });
 
-            // Upload processed images to Firebase
-            const processedFiles = await fs.readdir(tempOutputDir);
+            // Upload processed images from the output directory
+            // The script creates brand subfolders in output too
+            const brandOutputDir = path.join(tempOutputDir, normalizedBrand);
             
-            for (const filename of processedFiles) {
-                try {
-                    const filePath = path.join(tempOutputDir, filename);
-                    
-                    // Extract SKU from filename (assuming format: SKU_variant.ext or SKU.ext)
-                    const baseName = path.basename(filename, path.extname(filename));
-                    const sku = baseName.split('_')[0];
-                    
-                    // Read the processed image file
-                    const processedImageBuffer = await fs.readFile(filePath);
-                    
-                    // Construct the destination path for Firebase Storage
-                    const destinationPath = `brand-images/${normalizedBrand}/${filename}`;
-                    
-                    // Upload to Firebase
-                    const { publicUrl } = await uploadProcessedImage(processedImageBuffer, destinationPath);
-                    
-                    processedResults.push({
-                        filename: filename,
-                        sku: sku,
-                        url: publicUrl,
-                        success: true
-                    });
-                } catch (uploadError) {
-                    console.error(`Failed to upload ${filename}:`, uploadError);
-                    failedUploads.push({
-                        filename: filename,
-                        error: uploadError.message
-                    });
+            if (await fs.access(brandOutputDir).then(() => true).catch(() => false)) {
+                const processedFiles = await fs.readdir(brandOutputDir);
+                
+                for (const filename of processedFiles) {
+                    try {
+                        const filePath = path.join(brandOutputDir, filename);
+                        
+                        // Extract SKU from filename (format: sku_1.webp or sku_1_400x400.webp)
+                        const baseName = path.basename(filename, path.extname(filename));
+                        const sku = baseName.split('_')[0];
+                        
+                        // Read the processed image file
+                        const processedImageBuffer = await fs.readFile(filePath);
+                        
+                        // Construct the destination path for Firebase Storage
+                        const destinationPath = `brand-images/${normalizedBrand}/${filename}`;
+                        
+                        // Upload to Firebase
+                        const { publicUrl } = await uploadProcessedImage(processedImageBuffer, destinationPath);
+                        
+                        processedResults.push({
+                            filename: filename,
+                            sku: sku,
+                            url: publicUrl,
+                            success: true
+                        });
+                        
+                        // Update the item in Firestore to mark it has images
+                        try {
+                            const itemsQuery = await db.collection('items_data')
+                                .where('sku', '==', sku)
+                                .limit(1)
+                                .get();
+                            
+                            if (!itemsQuery.empty) {
+                                await itemsQuery.docs[0].ref.update({
+                                    images_matched: true,
+                                    lastImageUpdate: admin.firestore.FieldValue.serverTimestamp()
+                                });
+                            }
+                        } catch (updateError) {
+                            console.error(`Failed to update Firestore for SKU ${sku}:`, updateError);
+                        }
+                        
+                    } catch (uploadError) {
+                        console.error(`Failed to upload ${filename}:`, uploadError);
+                        failedUploads.push({
+                            filename: filename,
+                            error: uploadError.message
+                        });
+                    }
                 }
+            } else {
+                console.error(`Output directory not found: ${brandOutputDir}`);
+                throw new Error('Processed images directory not found');
             }
 
         } finally {
